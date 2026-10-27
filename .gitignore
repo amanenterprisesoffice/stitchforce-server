@@ -1,0 +1,32 @@
+# Go binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Build output
+/bin/
+/dist/
+
+# Go workspace
+go.work
+go.work.sum
+
+# Environment variables and secrets
+.env
+.env.*
+
+# IDEs
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+
+
+# ignore /tmp folder and runtime folder
+/tmp/
+/runtime/

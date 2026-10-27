@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS garment_workers;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS organizations;
