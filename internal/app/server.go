@@ -27,6 +27,9 @@ func NewServer(
 	router := httpv1.NewRouter(
 		useCases.Users,
 		useCases.GarmentWorkers,
+		useCases.Organization,
+		useCases.Style,
+		useCases.StyleOperations,
 		log,
 		jwtManager,
 		validator.New(),

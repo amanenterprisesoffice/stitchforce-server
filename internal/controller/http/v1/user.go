@@ -1,9 +1,9 @@
-
 package v1
 
 import (
 	"net/http"
 
+	"stitchforce-server/internal/controller/http/middleware"
 	"stitchforce-server/internal/controller/http/v1/request"
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/usecase"
@@ -54,7 +54,11 @@ func (h *UserHandler) Register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, u)
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"message": "User registered successfully",
+		"user":    u,
+	})
 }
 
 func (h *UserHandler) Login(c *gin.Context) {
@@ -64,6 +68,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 		writeValidationError(c, err)
 		return
 	}
+
 	if err := h.validate.Struct(req); err != nil {
 		writeValidationError(c, err)
 		return
@@ -79,15 +84,43 @@ func (h *UserHandler) Login(c *gin.Context) {
 		return
 	}
 
-	token, err := h.jwt.Generate(u.ID, u.Role)
+	token, err := h.jwt.Generate(u.ID, u.Role, u.OrganizationID)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
+	// Set JWT in HTTP-only cookie
+	c.SetCookie(
+		"access_token", // Cookie name
+		token,          // JWT token
+		3600,           // Max age: 1 hour
+		"/",            // Path
+		"",             // Domain (current domain)
+		true,           // Secure (HTTPS only)
+		true,           // HttpOnly
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Login successful",
+		"user":    u,
+		"token":   token,
+	})
+}
+
+func (h *UserHandler) GetMe(c *gin.Context) {
+	userID := middleware.UserID(c)
+	u, err := h.users.GetByID(c.Request.Context(), userID)
 	if err != nil {
 		writeError(c, err)
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"token": token,
-		"user":  u,
+		"success": true,
+		"message": "User fetched successfully",
+		"user":    u,
 	})
 }
 

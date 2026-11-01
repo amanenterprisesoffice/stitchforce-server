@@ -13,6 +13,9 @@ import (
 func NewRouter(
 	users usecase.UserUseCase,
 	garmentWorkers usecase.GarmentWorkerUseCase,
+	organizationUseCase usecase.OrganizationUseCase,
+	styleUseCase usecase.StyleUseCase,
+	styleOperationUseCase usecase.StyleOperationUseCase,
 	log *logger.Logger,
 	jwtManager *jwt.Manager,
 	validate *validator.Validate,
@@ -24,9 +27,9 @@ func NewRouter(
 	)
 
 	userHandler := NewUserHandler(users, validate, jwtManager)
-	garmentWorkerHandler := NewGarmentWorkerHandler(
-		garmentWorkers, validate,
-	)
+	garmentWorkerHandler := NewGarmentWorkerHandler(garmentWorkers, validate)
+	styleHandler := NewStyleHandler(styleUseCase, validate)
+	styleOperationHandler := NewStyleOperationHandler(styleOperationUseCase, validate)
 
 	v1 := r.Group("/v1")
 	{
@@ -41,6 +44,7 @@ func NewRouter(
 		{
 			usersRoute := protected.Group("/users")
 			{
+				usersRoute.GET("/me", userHandler.GetMe)
 				usersRoute.GET("", userHandler.List)
 				usersRoute.GET("/:id", userHandler.Get)
 				usersRoute.PUT("/:id", userHandler.Update)
@@ -54,7 +58,26 @@ func NewRouter(
 					workers.GET("", garmentWorkerHandler.List)
 					workers.GET("/:id", garmentWorkerHandler.Get)
 					workers.PUT("/:id", garmentWorkerHandler.Update)
+					workers.PATCH("/:id/status", garmentWorkerHandler.SetStatus)
 					workers.DELETE("/:id", garmentWorkerHandler.Delete)
+				}
+
+				styles := organizations.Group("/styles")
+				{
+					styles.POST("", styleHandler.Create)
+					styles.GET("", styleHandler.List)
+					styles.GET("/:styleID", styleHandler.Get)
+					styles.PUT("/:styleID", styleHandler.Update)
+					styles.DELETE("/:styleID", styleHandler.Delete)
+
+					operations := styles.Group("/:styleID/operations")
+					{
+						operations.POST("", styleOperationHandler.Create)
+						operations.GET("", styleOperationHandler.List)
+						operations.GET("/:id", styleOperationHandler.Get)
+						operations.PUT("/:id", styleOperationHandler.Update)
+						operations.DELETE("/:id", styleOperationHandler.Delete)
+					}
 				}
 			}
 		}

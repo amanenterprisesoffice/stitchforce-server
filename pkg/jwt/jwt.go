@@ -10,8 +10,9 @@ import (
 var ErrInvalidToken = errors.New("invalid token")
 
 type Claims struct {
-	UserID string `json:"user_id"`
-	Role   string `json:"role"`
+	UserID         string `json:"user_id"`
+	Role           string `json:"role"`
+	OrganizationID string `json:"organization_id"`
 	jwtv5.RegisteredClaims
 }
 
@@ -25,11 +26,12 @@ func New(secret, issuer string, ttl time.Duration) *Manager {
 	return &Manager{secret: []byte(secret), ttl: ttl, issuer: issuer}
 }
 
-func (m *Manager) Generate(userID, role string) (string, error) {
+func (m *Manager) Generate(userID, role, organizationID string) (string, error) {
 	now := time.Now()
 	claims := Claims{
-		UserID: userID,
-		Role:   role,
+		UserID:         userID,
+		Role:           role,
+		OrganizationID: organizationID,
 		RegisteredClaims: jwtv5.RegisteredClaims{
 			Issuer:    m.issuer,
 			Subject:   userID,
@@ -52,7 +54,7 @@ func (m *Manager) Parse(tokenString string) (*Claims, error) {
 	}
 
 	claims, ok := token.Claims.(*Claims)
-	if !ok || claims.UserID == "" {
+	if !ok || claims.UserID == "" || claims.OrganizationID == "" {
 		return nil, ErrInvalidToken
 	}
 	if m.issuer != "" && claims.Issuer != m.issuer {

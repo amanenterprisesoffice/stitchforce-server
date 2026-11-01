@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"stitchforce-server/config"
+	"stitchforce-server/internal/storage/s3"
 	"stitchforce-server/pkg/jwt"
 	"stitchforce-server/pkg/logger"
 	"stitchforce-server/pkg/postgres"
@@ -40,13 +41,19 @@ func Run() {
 		return
 	}
 
-	if err := postgres.Migrate(db.DB, "../../migrations"); err != nil {
+	if err := postgres.Migrate(db.DB, "./migrations"); err != nil {
 		log.Error("database migration failed", "error", err)
 		return
 	}
 
+	storage, err := s3.New(cfg.Storage)
+	if err != nil {
+		log.Error("failed to initialize storage", "error", err)
+		return
+	}
+
 	repositories := NewRepositories(db)
-	useCases := NewUseCases(repositories, log)
+	useCases := NewUseCases(repositories, log, storage)
 
 	jwtManager := jwt.New(
 		cfg.JWT.Secret,

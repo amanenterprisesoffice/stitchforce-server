@@ -69,3 +69,32 @@ type GarmentWorkerRepository interface {
 		string, // workerID
 	) error
 }
+
+
+type StyleRepository interface {
+    Create(context.Context, string, *entity.Style) error
+    GetByID(context.Context, string, string) (*entity.Style, error)
+    List(context.Context, string) ([]*entity.Style, error)
+    Update(context.Context, string, *entity.Style) error
+    Delete(context.Context, string, string) error
+}
+
+type StyleOperationRepository interface {
+    Create(context.Context, string, string, *entity.StyleOperation) error
+
+    GetByID(
+        context.Context,
+        string,
+        string,
+        string,
+    ) (*entity.StyleOperation, error)
+
+    List(
+        context.Context,
+        string, // organizationID
+		string, // styleID
+    ) ([]*entity.StyleOperation, error)
+
+    Update(context.Context, string, string, *entity.StyleOperation) error
+    Delete(context.Context, string, string, string) error
+}

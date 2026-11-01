@@ -12,6 +12,9 @@ import (
 )
 
 const UserIDKey = "user_id"
+const TokenKey = "access_token"
+const UserRoleKey = "role"
+const OrgIDKey = "organization_id"
 
 func RequestLogger(log *logger.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -35,13 +38,38 @@ func Recovery(log *logger.Logger) gin.HandlerFunc {
 
 func Auth(manager *jwt.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		claims, err := manager.Parse(strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer "))
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		var token string
+
+		// First, try HTTP-only cookie
+		token, err := c.Cookie(TokenKey)
+
+		// Fallback to Authorization header
+		if err != nil || token == "" {
+			authHeader := c.GetHeader("Authorization")
+			token = strings.TrimPrefix(authHeader, "Bearer ")
+		}
+
+		if token == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"message": "Authentication required",
+			})
 			return
 		}
+
+		claims, err := manager.Parse(token)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"message": "Invalid or expired token",
+			})
+			return
+		}
+
 		c.Set(UserIDKey, claims.UserID)
-		c.Set("role", claims.Role)
+		c.Set(UserRoleKey, claims.Role)
+		c.Set(OrgIDKey, claims.OrganizationID)
+
 		c.Next()
 	}
 }

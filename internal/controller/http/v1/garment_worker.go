@@ -1,4 +1,3 @@
-
 package v1
 
 import (
@@ -7,8 +6,10 @@ import (
 	"stitchforce-server/internal/controller/http/v1/request"
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/usecase"
+	"stitchforce-server/internal/usecase/input"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 )
 
@@ -27,8 +28,11 @@ func NewGarmentWorkerHandler(
 	}
 }
 
+// CREATE
+
 func (h *GarmentWorkerHandler) Create(c *gin.Context) {
 	organizationID := c.Param("organizationID")
+
 	if organizationID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "organization id is required",
@@ -38,7 +42,7 @@ func (h *GarmentWorkerHandler) Create(c *gin.Context) {
 
 	var req request.CreateGarmentWorker
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBindWith(&req, binding.FormMultipart); err != nil {
 		writeValidationError(c, err)
 		return
 	}
@@ -48,24 +52,47 @@ func (h *GarmentWorkerHandler) Create(c *gin.Context) {
 		return
 	}
 
-	worker := &entity.GarmentWorker{
-		OrganizationID: organizationID,
-		Name:           req.Name,
-		Phone:          req.Phone,
-		Gender:         req.Gender,
+	var photo *input.UploadFile
+
+	file, header, err := c.Request.FormFile("photo")
+	if err == nil {
+		defer file.Close()
+
+		photo = &input.UploadFile{
+			Reader:      file,
+			Size:        header.Size,
+			ContentType: header.Header.Get("Content-Type"),
+			Filename:    header.Filename,
+		}
+	} else if err != http.ErrMissingFile {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid profile photo",
+		})
+		return
+	}
+
+	createInput := &input.CreateGarmentWorkerInput{
+		Name:   req.Name,
+		Phone:  req.Phone,
+		Gender: req.Gender,
+		Photo:  photo,
 	}
 
 	if err := h.workers.Create(
 		c.Request.Context(),
 		organizationID,
-		worker,
+		createInput,
 	); err != nil {
 		writeError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusCreated, worker)
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "garment worker created successfully",
+	})
 }
+
+// GET BY ID
 
 func (h *GarmentWorkerHandler) Get(c *gin.Context) {
 	organizationID := c.Param("organizationID")
@@ -83,6 +110,8 @@ func (h *GarmentWorkerHandler) Get(c *gin.Context) {
 	c.JSON(http.StatusOK, worker)
 }
 
+// LIST
+
 func (h *GarmentWorkerHandler) List(c *gin.Context) {
 	organizationID := c.Param("organizationID")
 
@@ -97,6 +126,8 @@ func (h *GarmentWorkerHandler) List(c *gin.Context) {
 
 	c.JSON(http.StatusOK, workers)
 }
+
+// UPDATE
 
 func (h *GarmentWorkerHandler) Update(c *gin.Context) {
 	organizationID := c.Param("organizationID")
@@ -130,11 +161,62 @@ func (h *GarmentWorkerHandler) Update(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, worker)
+	c.JSON(http.StatusOK, gin.H{
+		"message": "garment worker updated successfully",
+	})
 }
+
+// SET STATUS
+
+func (h *GarmentWorkerHandler) SetStatus(c *gin.Context) {
+	organizationID := c.Param("organizationID")
+
+	if organizationID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "organization id is required",
+		})
+		return
+	}
+
+	var req request.SetGarmentWorkerStatus
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		writeValidationError(c, err)
+		return
+	}
+
+	if err := h.validate.Struct(req); err != nil {
+		writeValidationError(c, err)
+		return
+	}
+
+	if err := h.workers.SetStatus(
+		c.Request.Context(),
+		organizationID,
+		c.Param("id"),
+		req.Status,
+	); err != nil {
+		writeError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "garment worker status updated successfully",
+		"status":  req.Status,
+	})
+}
+
+// DELETE (SOFT DELETE)
 
 func (h *GarmentWorkerHandler) Delete(c *gin.Context) {
 	organizationID := c.Param("organizationID")
+
+	if organizationID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "organization id is required",
+		})
+		return
+	}
 
 	if err := h.workers.Delete(
 		c.Request.Context(),
@@ -145,5 +227,7 @@ func (h *GarmentWorkerHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	c.Status(http.StatusNoContent)
+	c.JSON(http.StatusOK, gin.H{
+		"message": "garment worker deleted successfully",
+	})
 }

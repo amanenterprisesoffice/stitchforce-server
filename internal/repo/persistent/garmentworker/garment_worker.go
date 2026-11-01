@@ -18,17 +18,32 @@ func New(db *sql.DB) repo.GarmentWorkerRepository {
 	return &Repository{db: db}
 }
 
+// =========================================
+// CREATE
+// =========================================
+
 func (r *Repository) Create(
 	ctx context.Context,
 	organizationID string,
 	worker *entity.GarmentWorker,
 ) error {
+
 	query := `
 		INSERT INTO garment_workers (
-			organization_id, name, phone, gender
+			organization_id,
+			name,
+			phone,
+			gender,
+			photo_key,
+			status
 		)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING
+			id,
+			status,
+			created_at,
+			updated_at,
+			deleted_at
 	`
 
 	return r.db.QueryRowContext(
@@ -38,34 +53,69 @@ func (r *Repository) Create(
 		worker.Name,
 		worker.Phone,
 		worker.Gender,
-	).Scan(&worker.ID)
+		worker.PhotoKey,
+		worker.Status,
+	).Scan(
+		&worker.ID,
+		&worker.Status,
+		&worker.CreatedAt,
+		&worker.UpdatedAt,
+		&worker.DeletedAt,
+	)
 }
+
+// =========================================
+// GET BY ID
+// =========================================
 
 func (r *Repository) GetByID(
 	ctx context.Context,
 	organizationID string,
 	id string,
 ) (*entity.GarmentWorker, error) {
+
 	query := `
-		SELECT id, organization_id, name, phone, gender
+		SELECT
+			id,
+			organization_id,
+			name,
+			phone,
+			gender,
+			photo_key,
+			status,
+			created_at,
+			updated_at,
+			deleted_at
 		FROM garment_workers
-		WHERE id = $1 AND organization_id = $2
+		WHERE id = $1
+		  AND organization_id = $2
+		  AND deleted_at IS NULL
 	`
 
 	worker := &entity.GarmentWorker{}
 
 	err := r.db.QueryRowContext(
-		ctx, query, id, organizationID,
+		ctx,
+		query,
+		id,
+		organizationID,
 	).Scan(
 		&worker.ID,
 		&worker.OrganizationID,
 		&worker.Name,
 		&worker.Phone,
 		&worker.Gender,
+		&worker.PhotoKey,
+		&worker.Status,
+		&worker.CreatedAt,
+		&worker.UpdatedAt,
+		&worker.DeletedAt,
 	)
+
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, repo.ErrNotFound
 	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -73,21 +123,42 @@ func (r *Repository) GetByID(
 	return worker, nil
 }
 
+// =========================================
+// LIST
+// =========================================
+
 func (r *Repository) List(
 	ctx context.Context,
 	organizationID string,
 ) ([]*entity.GarmentWorker, error) {
+
 	query := `
-		SELECT id, organization_id, name, phone, gender
+		SELECT
+			id,
+			organization_id,
+			name,
+			phone,
+			gender,
+			photo_key,
+			status,
+			created_at,
+			updated_at,
+			deleted_at
 		FROM garment_workers
 		WHERE organization_id = $1
-		ORDER BY id
+		  AND deleted_at IS NULL
+		ORDER BY created_at DESC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, organizationID)
+	rows, err := r.db.QueryContext(
+		ctx,
+		query,
+		organizationID,
+	)
 	if err != nil {
 		return nil, err
 	}
+
 	defer rows.Close()
 
 	workers := make([]*entity.GarmentWorker, 0)
@@ -101,6 +172,11 @@ func (r *Repository) List(
 			&worker.Name,
 			&worker.Phone,
 			&worker.Gender,
+			&worker.PhotoKey,
+			&worker.Status,
+			&worker.CreatedAt,
+			&worker.UpdatedAt,
+			&worker.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -115,17 +191,28 @@ func (r *Repository) List(
 	return workers, nil
 }
 
+// =========================================
+// UPDATE
+// =========================================
+
 func (r *Repository) Update(
 	ctx context.Context,
 	organizationID string,
 	worker *entity.GarmentWorker,
 ) error {
+
 	query := `
 		UPDATE garment_workers
-		SET name = $3,
-		    phone = $4,
-		    gender = $5
-		WHERE id = $1 AND organization_id = $2
+		SET
+			name = $3,
+			phone = $4,
+			gender = $5,
+			photo_key = $6,
+			status = $7,
+			updated_at = NOW()
+		WHERE id = $1
+		  AND organization_id = $2
+		  AND deleted_at IS NULL
 	`
 
 	result, err := r.db.ExecContext(
@@ -136,6 +223,8 @@ func (r *Repository) Update(
 		worker.Name,
 		worker.Phone,
 		worker.Gender,
+		worker.PhotoKey,
+		worker.Status,
 	)
 	if err != nil {
 		return err
@@ -145,6 +234,7 @@ func (r *Repository) Update(
 	if err != nil {
 		return err
 	}
+
 	if affected == 0 {
 		return repo.ErrNotFound
 	}
@@ -152,15 +242,29 @@ func (r *Repository) Update(
 	return nil
 }
 
+// =========================================
+// SOFT DELETE
+// =========================================
+
 func (r *Repository) Delete(
 	ctx context.Context,
 	organizationID string,
 	id string,
 ) error {
+
+	query := `
+		UPDATE garment_workers
+		SET
+			deleted_at = NOW(),
+			updated_at = NOW()
+		WHERE id = $1
+		  AND organization_id = $2
+		  AND deleted_at IS NULL
+	`
+
 	result, err := r.db.ExecContext(
 		ctx,
-		`DELETE FROM garment_workers
-		 WHERE id = $1 AND organization_id = $2`,
+		query,
 		id,
 		organizationID,
 	)
@@ -172,6 +276,7 @@ func (r *Repository) Delete(
 	if err != nil {
 		return err
 	}
+
 	if affected == 0 {
 		return repo.ErrNotFound
 	}

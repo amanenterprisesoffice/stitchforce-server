@@ -1,10 +1,7 @@
-
 package user
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"strings"
 
@@ -12,6 +9,7 @@ import (
 	"stitchforce-server/internal/repo"
 	"stitchforce-server/internal/usecase"
 	"stitchforce-server/pkg/logger"
+	"stitchforce-server/pkg/utils"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -29,14 +27,6 @@ func New(
 		repository: repository,
 		logger:     logger,
 	}
-}
-
-func newID() (string, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
 }
 
 func (u *UseCase) Register(
@@ -71,12 +61,12 @@ func (u *UseCase) Register(
 		return nil, err
 	}
 
-	orgID, err := newID()
+	orgID, err := utils.NewID()
 	if err != nil {
 		return nil, err
 	}
 
-	userID, err := newID()
+	userID, err := utils.NewID()
 	if err != nil {
 		return nil, err
 	}

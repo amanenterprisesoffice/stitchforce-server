@@ -14,6 +14,7 @@ type Config struct {
 	Postgres PostgresConfig
 	JWT      JWTConfig
 	Log      LogConfig
+	Storage  StorageConfig
 }
 
 type (
@@ -21,6 +22,15 @@ type (
 		Name            string
 		Port            string
 		ShutdownTimeout time.Duration
+	}
+
+	StorageConfig struct {
+		Endpoint      string
+		Region        string
+		Bucket        string
+		AccessKey     string
+		SecretKey     string
+		ForcePathStyle bool
 	}
 
 	PostgresConfig struct {
@@ -44,7 +54,7 @@ type (
 )
 
 func Load() Config {
-	if err := godotenv.Load("../../.env"); err != nil {
+	if err := godotenv.Load(".env"); err != nil {
 		log.Printf("Warning: .env file not loaded: %v", err)
 	}
 
@@ -69,6 +79,14 @@ func Load() Config {
 		},
 		Log: LogConfig{
 			Level: env("LOG_LEVEL", "info"),
+		},
+		Storage: StorageConfig{
+			Endpoint:      env("STORAGE_ENDPOINT", ""),
+			Region:        env("STORAGE_REGION", ""),
+			Bucket:        env("STORAGE_BUCKET", ""),
+			AccessKey:     env("STORAGE_ACCESS_KEY", ""),
+			SecretKey:     env("STORAGE_SECRET_KEY", ""),
+			ForcePathStyle: env("STORAGE_FORCE_PATH_STYLE", "true") == "true",
 		},
 	}
 }

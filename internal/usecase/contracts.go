@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"stitchforce-server/internal/entity"
+	"stitchforce-server/internal/usecase/input"
+	"stitchforce-server/internal/usecase/output"
 )
 
 type OrganizationUseCase interface {
@@ -25,22 +27,18 @@ type UserUseCase interface {
 }
 
 type GarmentWorkerUseCase interface {
-	Create(
-		context.Context,
-		string, // organizationID
-		*entity.GarmentWorker,
-	) error
+	Create(context.Context, string, *input.CreateGarmentWorkerInput) error
 
 	GetByID(
 		context.Context,
 		string, // organizationID
 		string, // workerID
-	) (*entity.GarmentWorker, error)
+	) (*output.GarmentWorker, error)
 
 	List(
 		context.Context,
 		string, // organizationID
-	) ([]*entity.GarmentWorker, error)
+	) ([]*output.GarmentWorker, error)
 
 	Update(
 		context.Context,
@@ -52,5 +50,79 @@ type GarmentWorkerUseCase interface {
 		context.Context,
 		string, // organizationID
 		string, // workerID
+	) error
+
+	SetStatus(
+		context.Context,
+		string, // organizationID
+		string, // workerID
+		string, // status
+	) error
+}
+
+type StyleUseCase interface {
+	Create(
+		context.Context,
+		string, // organizationID
+		*entity.Style,
+	) error
+
+	GetByID(
+		context.Context,
+		string, // organizationID
+		string, // styleID
+	) (*entity.Style, error)
+
+	List(
+		context.Context,
+		string, // organizationID
+	) ([]*entity.Style, error)
+
+	Update(
+		context.Context,
+		string, // organizationID
+		*entity.Style,
+	) error
+
+	Delete(
+		context.Context,
+		string, // organizationID
+		string, // styleID
+	) error
+}
+
+type StyleOperationUseCase interface {
+	Create(
+		context.Context,
+		string, // organizationID
+		string, // styleID
+		*entity.StyleOperation,
+	) error
+
+	GetByID(
+		context.Context,
+		string, // organizationID
+		string, // styleID
+		string, // operationID
+	) (*entity.StyleOperation, error)
+
+	List(
+		context.Context,
+		string, // organizationID
+		string, // styleID
+	) ([]*entity.StyleOperation, error)
+
+	Update(
+		context.Context,
+		string, // organizationID
+		string, // styleID
+		*entity.StyleOperation,
+	) error
+
+	Delete(
+		context.Context,
+		string, // organizationID
+		string, // styleID
+		string, // operationID
 	) error
 }
