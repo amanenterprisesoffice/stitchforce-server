@@ -13,6 +13,7 @@ import (
 	"stitchforce-server/internal/usecase"
 	"stitchforce-server/internal/usecase/input"
 	"stitchforce-server/internal/usecase/output"
+	ucutils "stitchforce-server/internal/usecase/utils"
 	"stitchforce-server/pkg/logger"
 	"stitchforce-server/pkg/utils"
 )
@@ -48,7 +49,7 @@ func (u *UseCase) Create(
 	input *input.CreateGarmentWorkerInput,
 ) error {
 
-	organizationID, err := validateOrganizationID(organizationID)
+	organizationID, err := ucutils.ValidateOrganizationID(organizationID)
 	if err != nil {
 		return err
 	}
@@ -65,7 +66,7 @@ func (u *UseCase) Create(
 		Status:         WorkerStatusActive,
 	}
 
-	if err := validateWorker(worker); err != nil {
+	if err := ucutils.ValidateWorker(worker); err != nil {
 		return err
 	}
 
@@ -154,7 +155,7 @@ func (u *UseCase) GetByID(
 	workerID string,
 ) (*output.GarmentWorker, error) {
 
-	organizationID, err := validateOrganizationID(organizationID)
+	organizationID, err := ucutils.ValidateOrganizationID(organizationID)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +183,7 @@ func (u *UseCase) List(
 	organizationID string,
 ) ([]*output.GarmentWorker, error) {
 
-	organizationID, err := validateOrganizationID(organizationID)
+	organizationID, err := ucutils.ValidateOrganizationID(organizationID)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +213,7 @@ func (u *UseCase) Update(
 	worker *entity.GarmentWorker,
 ) error {
 
-	organizationID, err := validateOrganizationID(organizationID)
+	organizationID, err := ucutils.ValidateOrganizationID(organizationID)
 	if err != nil {
 		return err
 	}
@@ -229,7 +230,7 @@ func (u *UseCase) Update(
 
 	worker.OrganizationID = organizationID
 
-	if err := validateWorker(worker); err != nil {
+	if err := ucutils.ValidateWorker(worker); err != nil {
 		return err
 	}
 
@@ -257,7 +258,7 @@ func (u *UseCase) SetStatus(
 	status string,
 ) error {
 
-	organizationID, err := validateOrganizationID(organizationID)
+	organizationID, err := ucutils.ValidateOrganizationID(organizationID)
 	if err != nil {
 		return err
 	}
@@ -309,7 +310,7 @@ func (u *UseCase) Delete(
 	workerID string,
 ) error {
 
-	organizationID, err := validateOrganizationID(organizationID)
+	organizationID, err := ucutils.ValidateOrganizationID(organizationID)
 	if err != nil {
 		return err
 	}
@@ -347,43 +348,6 @@ func (u *UseCase) Delete(
 		"organization_id", organizationID,
 		"worker_id", workerID,
 	)
-
-	return nil
-}
-
-// HELPERS
-func validateOrganizationID(organizationID string) (string, error) {
-	organizationID = strings.TrimSpace(organizationID)
-
-	if organizationID == "" {
-		return "", errors.New("organization id is required")
-	}
-
-	return organizationID, nil
-}
-
-func validateWorker(worker *entity.GarmentWorker) error {
-	if worker == nil {
-		return errors.New("garment worker is required")
-	}
-
-	worker.Name = strings.TrimSpace(worker.Name)
-	worker.Phone = strings.TrimSpace(worker.Phone)
-	worker.Gender = strings.ToLower(strings.TrimSpace(worker.Gender))
-
-	if worker.Name == "" {
-		return errors.New("name is required")
-	}
-
-	if worker.Phone == "" {
-		return errors.New("phone is required")
-	}
-
-	switch worker.Gender {
-	case "male", "female", "other":
-	default:
-		return errors.New("gender must be male, female, or other")
-	}
 
 	return nil
 }

@@ -126,3 +126,34 @@ type StyleOperationUseCase interface {
 		string, // operationID
 	) error
 }
+
+type SizeUseCase interface {
+	Create(
+		context.Context,
+		string, // organizationID
+		*entity.Size,
+	) error
+
+	GetByID(
+		context.Context,
+		string, // organizationID
+		string, // sizeID
+	) (*entity.Size, error)
+
+	List(
+		context.Context,
+		string, // organizationID
+	) ([]*entity.Size, error)
+
+	Update(
+		context.Context,
+		string, // organizationID
+		*entity.Size,
+	) error
+
+	Delete(
+		context.Context,
+		string, // organizationID
+		string, // sizeID
+	) error
+}

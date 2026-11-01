@@ -6,6 +6,7 @@ import (
 	organizationrepo "stitchforce-server/internal/repo/persistent/organization"
 	stylerepo "stitchforce-server/internal/repo/persistent/style"
 	styleopsrepo "stitchforce-server/internal/repo/persistent/styleoperation"
+	sizerepo "stitchforce-server/internal/repo/persistent/size"
 	userrepo "stitchforce-server/internal/repo/persistent/user"
 	"stitchforce-server/pkg/postgres"
 )
@@ -16,6 +17,7 @@ type Repositories struct {
 	Organization    repo.OrganizationRepository
 	Style           repo.StyleRepository
 	StyleOperations repo.StyleOperationRepository
+	Sizes           repo.SizeRepository
 }
 
 func NewRepositories(database *postgres.Client) Repositories {
@@ -25,5 +27,6 @@ func NewRepositories(database *postgres.Client) Repositories {
 		Organization:    organizationrepo.New(database.DB),
 		Style:           stylerepo.New(database.DB),
 		StyleOperations: styleopsrepo.New(database.DB),
+		Sizes: sizerepo.New(database.DB),
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/repo"
 	"stitchforce-server/internal/usecase"
+	ucutils "stitchforce-server/internal/usecase/utils"
 	"stitchforce-server/pkg/logger"
 	"stitchforce-server/pkg/utils"
 )
@@ -27,44 +28,6 @@ func New(
 	}
 }
 
-func validateOrganizationID(organizationID string) (string, error) {
-	organizationID = strings.TrimSpace(organizationID)
-
-	if organizationID == "" {
-		return "", errors.New("organization id is required")
-	}
-
-	return organizationID, nil
-}
-
-func validateStyleID(styleID string) (string, error) {
-	styleID = strings.TrimSpace(styleID)
-
-	if styleID == "" {
-		return "", errors.New("style id is required")
-	}
-
-	return styleID, nil
-}
-
-func validateStyleOperation(operation *entity.StyleOperation) error {
-	if operation == nil {
-		return errors.New("style operation is required")
-	}
-
-	operation.Name = strings.TrimSpace(operation.Name)
-
-	if operation.Name == "" {
-		return errors.New("operation name is required")
-	}
-
-	if operation.RatePerPiece < 0 {
-		return errors.New("rate per piece cannot be negative")
-	}
-
-	return nil
-}
-
 func (u *UseCase) Create(
 	ctx context.Context,
 	organizationID string,
@@ -73,17 +36,17 @@ func (u *UseCase) Create(
 ) error {
 	var err error
 
-	organizationID, err = validateOrganizationID(organizationID)
+	organizationID, err = ucutils.ValidateOrganizationID(organizationID)
 	if err != nil {
 		return err
 	}
 
-	styleID, err = validateStyleID(styleID)
+	styleID, err = ucutils.ValidateStyleID(styleID)
 	if err != nil {
 		return err
 	}
 
-	if err := validateStyleOperation(operation); err != nil {
+	if err := ucutils.ValidateStyleOperation(operation); err != nil {
 		return err
 	}
 
@@ -97,8 +60,8 @@ func (u *UseCase) Create(
 
 	u.logger.InfoContext(
 		ctx,
+		"creating style operation",
 		"id", operation.ID,
-		"action", "creating style operation",
 		"organization_id", organizationID,
 		"style_id", styleID,
 		"name", operation.Name,
@@ -120,12 +83,12 @@ func (u *UseCase) GetByID(
 ) (*entity.StyleOperation, error) {
 	var err error
 
-	organizationID, err = validateOrganizationID(organizationID)
+	organizationID, err = ucutils.ValidateOrganizationID(organizationID)
 	if err != nil {
 		return nil, err
 	}
 
-	styleID, err = validateStyleID(styleID)
+	styleID, err = ucutils.ValidateStyleID(styleID)
 	if err != nil {
 		return nil, err
 	}
@@ -150,12 +113,12 @@ func (u *UseCase) List(
 ) ([]*entity.StyleOperation, error) {
 	var err error
 
-	organizationID, err = validateOrganizationID(organizationID)
+	organizationID, err = ucutils.ValidateOrganizationID(organizationID)
 	if err != nil {
 		return nil, err
 	}
 
-	styleID, err = validateStyleID(styleID)
+	styleID, err = ucutils.ValidateStyleID(styleID)
 	if err != nil {
 		return nil, err
 	}
@@ -171,12 +134,12 @@ func (u *UseCase) Update(
 ) error {
 	var err error
 
-	organizationID, err = validateOrganizationID(organizationID)
+	organizationID, err = ucutils.ValidateOrganizationID(organizationID)
 	if err != nil {
 		return err
 	}
 
-	styleID, err = validateStyleID(styleID)
+	styleID, err = ucutils.ValidateStyleID(styleID)
 	if err != nil {
 		return err
 	}
@@ -191,7 +154,7 @@ func (u *UseCase) Update(
 		return errors.New("style operation id is required")
 	}
 
-	if err := validateStyleOperation(operation); err != nil {
+	if err := ucutils.ValidateStyleOperation(operation); err != nil {
 		return err
 	}
 
@@ -223,12 +186,12 @@ func (u *UseCase) Delete(
 ) error {
 	var err error
 
-	organizationID, err = validateOrganizationID(organizationID)
+	organizationID, err = ucutils.ValidateOrganizationID(organizationID)
 	if err != nil {
 		return err
 	}
 
-	styleID, err = validateStyleID(styleID)
+	styleID, err = ucutils.ValidateStyleID(styleID)
 	if err != nil {
 		return err
 	}

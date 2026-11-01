@@ -16,6 +16,7 @@ func NewRouter(
 	organizationUseCase usecase.OrganizationUseCase,
 	styleUseCase usecase.StyleUseCase,
 	styleOperationUseCase usecase.StyleOperationUseCase,
+	sizeUseCase usecase.SizeUseCase,
 	log *logger.Logger,
 	jwtManager *jwt.Manager,
 	validate *validator.Validate,
@@ -30,6 +31,7 @@ func NewRouter(
 	garmentWorkerHandler := NewGarmentWorkerHandler(garmentWorkers, validate)
 	styleHandler := NewStyleHandler(styleUseCase, validate)
 	styleOperationHandler := NewStyleOperationHandler(styleOperationUseCase, validate)
+	sizeHandler := NewSizeHandler(sizeUseCase, validate)
 
 	v1 := r.Group("/v1")
 	{
@@ -78,6 +80,15 @@ func NewRouter(
 						operations.PUT("/:id", styleOperationHandler.Update)
 						operations.DELETE("/:id", styleOperationHandler.Delete)
 					}
+				}
+
+				sizes := organizations.Group("/sizes")
+				{
+					sizes.POST("", sizeHandler.Create)
+					sizes.GET("", sizeHandler.List)
+					sizes.GET("/:id", sizeHandler.Get)
+					sizes.PUT("/:id", sizeHandler.Update)
+					sizes.DELETE("/:id", sizeHandler.Delete)
 				}
 			}
 		}

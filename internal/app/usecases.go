@@ -7,6 +7,7 @@ import (
 	organizationuc "stitchforce-server/internal/usecase/organization"
 	styleuc "stitchforce-server/internal/usecase/style"
 	styleopsuc "stitchforce-server/internal/usecase/styleoperation"
+	sizeuc "stitchforce-server/internal/usecase/size"
 	useruc "stitchforce-server/internal/usecase/user"
 	"stitchforce-server/pkg/logger"
 )
@@ -17,6 +18,7 @@ type UseCases struct {
 	Organization    usecase.OrganizationUseCase
 	Style           usecase.StyleUseCase
 	StyleOperations usecase.StyleOperationUseCase
+	Size            usecase.SizeUseCase
 }
 
 func NewUseCases(
@@ -37,5 +39,6 @@ func NewUseCases(
 		Organization:    organizationuc.New(repositories.Organization, log),
 		Style:           styleuc.New(repositories.Style, log),
 		StyleOperations: styleopsuc.New(repositories.StyleOperations, log),
+		Size:            sizeuc.New(repositories.Sizes, log),
 	}
 }

@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"strings"
-	"unicode/utf8"
 
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/repo"
 	"stitchforce-server/internal/usecase"
+	ucutils "stitchforce-server/internal/usecase/utils"
 	"stitchforce-server/pkg/logger"
 )
 
@@ -29,23 +29,8 @@ func validateID(id string) (string, error) {
 	return id, nil
 }
 
-func validateOrganization(org *entity.Organization) error {
-	if org == nil {
-		return errors.New("organization is required")
-	}
-
-	org.Name = strings.TrimSpace(org.Name)
-	length := utf8.RuneCountInString(org.Name)
-
-	if length < 2 || length > 150 {
-		return errors.New("organization name must be between 2 and 150 characters")
-	}
-
-	return nil
-}
-
 func (u *UseCase) Create(ctx context.Context, org *entity.Organization) error {
-	if err := validateOrganization(org); err != nil {
+	if err := ucutils.ValidateOrganization(org); err != nil {
 		return err
 	}
 
@@ -97,7 +82,7 @@ func (u *UseCase) Update(ctx context.Context, org *entity.Organization) error {
 
 	org.ID = id
 
-	if err := validateOrganization(org); err != nil {
+	if err := ucutils.ValidateOrganization(org); err != nil {
 		return err
 	}
 
