@@ -12,9 +12,16 @@ type GarmentWorker struct {
 	Gender         string     `json:"gender" db:"gender"`
 	PhotoKey       string     `json:"photo_key" db:"photo_key"`
 
-	Status         string     `json:"status" db:"status"` // active, inactive
+	Status         WorkerStatus     `json:"status" db:"status"` // active, inactive
 
 	CreatedAt      time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at" db:"updated_at"`
 	DeletedAt      *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
 }
+
+type WorkerStatus string
+
+const (
+	WorkerStatusActive   WorkerStatus = "active"
+	WorkerStatusInactive WorkerStatus = "inactive"
+)

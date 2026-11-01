@@ -19,9 +19,6 @@ import (
 )
 
 const (
-	WorkerStatusActive   = "active"
-	WorkerStatusInactive = "inactive"
-
 	maxPhotoSize = 5 * 1024 * 1024
 )
 
@@ -43,12 +40,12 @@ func New(
 	}
 }
 
+
 func (u *UseCase) Create(
 	ctx context.Context,
 	organizationID string,
 	input *input.CreateGarmentWorkerInput,
 ) error {
-
 	organizationID, err := ucutils.ValidateOrganizationID(organizationID)
 	if err != nil {
 		return err
@@ -58,19 +55,26 @@ func (u *UseCase) Create(
 		return errors.New("garment worker input is required")
 	}
 
+	id, err := utils.NewID()
+	if err != nil {
+		return err
+	}
+
 	worker := &entity.GarmentWorker{
+		ID:             id,
 		OrganizationID: organizationID,
 		Name:           input.Name,
 		Phone:          input.Phone,
 		Gender:         input.Gender,
-		Status:         WorkerStatusActive,
+		Status:         entity.WorkerStatusActive,
+		PhotoKey:       "",
 	}
 
 	if err := ucutils.ValidateWorker(worker); err != nil {
 		return err
 	}
 
-	// Validate photo before creating the database record.
+	// Validate photo before performing any operations.
 	if input.Photo != nil {
 		if input.Photo.Size <= 0 {
 			return errors.New("photo must not be empty")
@@ -94,60 +98,55 @@ func (u *UseCase) Create(
 		"name", worker.Name,
 	)
 
-	if err := u.repository.Create(ctx, organizationID, worker); err != nil {
-		return fmt.Errorf("create garment worker: %w", err)
-	}
+	var photoKey string
 
-	// Profile photo is optional.
-	if input.Photo == nil {
-		return nil
-	}
-
-	photoID, err := utils.NewID()
-	if err != nil {
-		return fmt.Errorf("generate photo ID: %w", err)
-	}
-
-	photoKey := fmt.Sprintf(
-		"organizations/%s/workers/%s/profile/%s",
-		organizationID,
-		worker.ID,
-		photoID,
-	)
-
-	if err := u.storage.Upload(
-		ctx,
-		photoKey,
-		input.Photo.Reader,
-		input.Photo.Size,
-		input.Photo.ContentType,
-	); err != nil {
-
-		u.rollbackWorkerCreation(ctx, organizationID, worker.ID)
-
-		return fmt.Errorf("upload worker photo: %w", err)
-	}
-
-	worker.PhotoKey = photoKey
-
-	if err := u.repository.Update(ctx, organizationID, worker); err != nil {
-
-		if deleteErr := u.storage.Delete(ctx, photoKey); deleteErr != nil {
-			u.logger.ErrorContext(
-				ctx,
-				"failed to cleanup uploaded worker photo",
-				"photo_key", photoKey,
-				"error", deleteErr,
-			)
+	// Upload photo before creating the database record.
+	if input.Photo != nil {
+		photoID, err := utils.NewID()
+		if err != nil {
+			return fmt.Errorf("generate photo ID: %w", err)
 		}
 
-		u.rollbackWorkerCreation(ctx, organizationID, worker.ID)
+		photoKey = fmt.Sprintf(
+			"organizations/%s/workers/%s/profile/%s",
+			organizationID,
+			worker.ID,
+			photoID,
+		)
 
-		return fmt.Errorf("save worker photo key: %w", err)
+		if err := u.storage.Upload(
+			ctx,
+			photoKey,
+			input.Photo.Reader,
+			input.Photo.Size,
+			input.Photo.ContentType,
+		); err != nil {
+			return fmt.Errorf("upload worker photo: %w", err)
+		}
+
+		worker.PhotoKey = photoKey
+	}
+
+	// Create worker with photo key already populated.
+	if err := u.repository.Create(ctx, organizationID, worker); err != nil {
+		// Cleanup uploaded photo if database creation fails.
+		if photoKey != "" {
+			if deleteErr := u.storage.Delete(ctx, photoKey); deleteErr != nil {
+				u.logger.ErrorContext(
+					ctx,
+					"failed to cleanup uploaded worker photo",
+					"photo_key", photoKey,
+					"error", deleteErr,
+				)
+			}
+		}
+
+		return fmt.Errorf("create garment worker: %w", err)
 	}
 
 	return nil
 }
+
 
 func (u *UseCase) GetByID(
 	ctx context.Context,
@@ -234,7 +233,7 @@ func (u *UseCase) Update(
 		return err
 	}
 
-	if err := validateWorkerStatus(worker.Status); err != nil {
+	if err := ucutils.ValidateWorkerStatus(worker.Status); err != nil {
 		return err
 	}
 
@@ -255,7 +254,7 @@ func (u *UseCase) SetStatus(
 	ctx context.Context,
 	organizationID string,
 	workerID string,
-	status string,
+	status entity.WorkerStatus,
 ) error {
 
 	organizationID, err := ucutils.ValidateOrganizationID(organizationID)
@@ -269,9 +268,7 @@ func (u *UseCase) SetStatus(
 		return errors.New("garment worker id is required")
 	}
 
-	status = strings.ToLower(strings.TrimSpace(status))
-
-	if err := validateWorkerStatus(status); err != nil {
+	if err := ucutils.ValidateWorkerStatus(status); err != nil {
 		return err
 	}
 
@@ -352,36 +349,6 @@ func (u *UseCase) Delete(
 	return nil
 }
 
-func validateWorkerStatus(status string) error {
-	status = strings.ToLower(strings.TrimSpace(status))
-
-	switch status {
-	case WorkerStatusActive, WorkerStatusInactive:
-		return nil
-	default:
-		return errors.New("worker status must be active or inactive")
-	}
-}
-
-// ROLLBACK
-func (u *UseCase) rollbackWorkerCreation(
-	ctx context.Context,
-	organizationID string,
-	workerID string,
-) {
-	if err := u.repository.Delete(
-		ctx,
-		organizationID,
-		workerID,
-	); err != nil {
-		u.logger.ErrorContext(
-			ctx,
-			"failed to rollback worker creation",
-			"worker_id", workerID,
-			"error", err,
-		)
-	}
-}
 
 // ENTITY TO OUTPUT
 func (u *UseCase) toOutput(

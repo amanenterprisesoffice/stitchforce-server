@@ -30,6 +30,7 @@ func (r *Repository) Create(
 
 	query := `
 		INSERT INTO garment_workers (
+			id,
 			organization_id,
 			name,
 			phone,
@@ -37,7 +38,7 @@ func (r *Repository) Create(
 			photo_key,
 			status
 		)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING
 			id,
 			status,
@@ -49,6 +50,7 @@ func (r *Repository) Create(
 	return r.db.QueryRowContext(
 		ctx,
 		query,
+		worker.ID,
 		organizationID,
 		worker.Name,
 		worker.Phone,

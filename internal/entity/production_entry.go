@@ -1,33 +1,22 @@
-
 package entity
 
 import "time"
 
 type ProductionEntry struct {
 	ID             string `json:"id" db:"id"`
-
 	OrganizationID string `json:"organization_id" db:"organization_id"`
 
-	// Production references
-	WorkerID       string `json:"worker_id" db:"worker_id"`
-	StyleID        string `json:"style_id" db:"style_id"`
-	BundleID       string `json:"bundle_id" db:"bundle_id"`
-	OperationID    string `json:"operation_id" db:"operation_id"`
+	BundleID        string `json:"bundle_id" db:"bundle_id"`
+	WorkerID        string `json:"worker_id" db:"worker_id"`
+	StyleOperationID string `json:"style_operation_id" db:"style_operation_id"`
 
-	// Production details
-	CompletedPieces int64 `json:"completed_pieces" db:"completed_pieces"`
-
-	// Historical rate snapshot.
-	// Stored in paise to avoid floating-point calculations.
+	Quantity     int   `json:"quantity" db:"quantity"`
 	RatePerPiece int64 `json:"rate_per_piece" db:"rate_per_piece"`
 
-	// CompletedPieces * RatePerPiece
-	TotalEarnings int64 `json:"total_earnings" db:"total_earnings"`
-
 	ProductionDate time.Time `json:"production_date" db:"production_date"`
+	Remarks        string    `json:"remarks" db:"remarks"`
 
-	Notes string `json:"notes" db:"notes"`
-
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	CreatedAt time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at" db:"updated_at"`
+	DeletedAt *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
 }

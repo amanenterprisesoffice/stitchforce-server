@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"errors"
 	"stitchforce-server/internal/entity"
 	"strings"
@@ -32,23 +33,22 @@ func ValidateOrganization(org *entity.Organization) error {
 	return nil
 }
 
-
 func ValidateSize(size *entity.Size) error {
-    if size == nil {
-        return errors.New("size is nil")
-    }
+	if size == nil {
+		return errors.New("size is nil")
+	}
 
-    size.Name = strings.TrimSpace(size.Name)
+	size.Name = strings.TrimSpace(size.Name)
 
-    if size.Name == "" {
-        return errors.New("size name is required")
-    }
+	if size.Name == "" {
+		return errors.New("size name is required")
+	}
 
-    if len(size.Name) > 50 {
-        return errors.New("size name must not exceed 50 characters")
-    }
+	if len(size.Name) > 50 {
+		return errors.New("size name must not exceed 50 characters")
+	}
 
-    return nil
+	return nil
 }
 
 func ValidateOrganizationID(organizationID string) (string, error) {
@@ -60,7 +60,6 @@ func ValidateOrganizationID(organizationID string) (string, error) {
 
 	return organizationID, nil
 }
-
 
 func ValidateWorker(worker *entity.GarmentWorker) error {
 	if worker == nil {
@@ -87,8 +86,6 @@ func ValidateWorker(worker *entity.GarmentWorker) error {
 
 	return nil
 }
-
-
 
 func ValidateStyle(style *entity.Style) error {
 	if style == nil {
@@ -120,7 +117,6 @@ func ValidateStyleID(styleID string) (string, error) {
 	return styleID, nil
 }
 
-
 func ValidateStyleOperation(operation *entity.StyleOperation) error {
 	if operation == nil {
 		return errors.New("style operation is required")
@@ -134,6 +130,101 @@ func ValidateStyleOperation(operation *entity.StyleOperation) error {
 
 	if operation.RatePerPiece < 0 {
 		return errors.New("rate per piece cannot be negative")
+	}
+
+	return nil
+}
+
+func ValidateBundle(bundle *entity.Bundle) error {
+	if bundle == nil {
+		return errors.New("bundle is required")
+	}
+
+	bundle.BundleNumber = strings.TrimSpace(bundle.BundleNumber)
+	bundle.StyleID = strings.TrimSpace(bundle.StyleID)
+	bundle.SizeID = strings.TrimSpace(bundle.SizeID)
+	bundle.Remarks = strings.TrimSpace(bundle.Remarks)
+
+	if bundle.BundleNumber == "" || len(bundle.BundleNumber) > 100 {
+		return errors.New("invalid bundle number")
+	}
+
+	if bundle.StyleID == "" || bundle.SizeID == "" {
+		return errors.New("style id and size id are required")
+	}
+
+	if bundle.Quantity <= 0 {
+		return errors.New("quantity must be greater than zero")
+	}
+
+	if len(bundle.Attributes) > 0 && !json.Valid(bundle.Attributes) {
+		return errors.New("invalid attributes")
+	}
+
+	// use switch
+	switch bundle.Status {
+	case entity.BundleStatusCreated, entity.BundleStatusReady, entity.BundleStatusInProgress, entity.BundleStatusCompleted:
+		// valid statuses
+	default:
+		return errors.New("invalid status")
+	}
+
+	if len(bundle.Remarks) > 1000 {
+		return errors.New("remarks too long")
+	}
+
+	return nil
+}
+
+func ValidateBundleID(id string) (string, error) {
+	id = strings.TrimSpace(id)
+
+	if id == "" {
+		return "", errors.New("invalid bundle id")
+	}
+
+	return id, nil
+}
+
+func ValidateWorkerStatus(status entity.WorkerStatus) error {
+	switch status {
+	case entity.WorkerStatusActive, entity.WorkerStatusInactive:
+		return nil
+	default:
+		return errors.New("worker status must be active or inactive")
+	}
+}
+
+func ValidateProductionEntry(
+	entry *entity.ProductionEntry,
+) error {
+
+	if entry == nil {
+		return errors.New("production entry is required")
+	}
+
+	entry.BundleID = strings.TrimSpace(entry.BundleID)
+	entry.WorkerID = strings.TrimSpace(entry.WorkerID)
+	entry.Remarks = strings.TrimSpace(entry.Remarks)
+
+	if entry.BundleID == "" {
+		return errors.New("bundle id is required")
+	}
+
+	if entry.WorkerID == "" {
+		return errors.New("garment worker id is required")
+	}
+
+	if entry.Quantity <= 0 {
+		return errors.New("production quantity must be greater than zero")
+	}
+
+	if entry.ProductionDate.IsZero() {
+		return errors.New("production date is required")
+	}
+
+	if len(entry.Remarks) > 1000 {
+		return errors.New("remarks cannot exceed 1000 characters")
 	}
 
 	return nil

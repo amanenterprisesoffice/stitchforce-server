@@ -3,11 +3,13 @@ package app
 import (
 	"stitchforce-server/internal/storage"
 	"stitchforce-server/internal/usecase"
+	bundleuc "stitchforce-server/internal/usecase/bundle"
 	garmentworkeruc "stitchforce-server/internal/usecase/garmentworker"
 	organizationuc "stitchforce-server/internal/usecase/organization"
+	productionentryuc "stitchforce-server/internal/usecase/productionentry"
+	sizeuc "stitchforce-server/internal/usecase/size"
 	styleuc "stitchforce-server/internal/usecase/style"
 	styleopsuc "stitchforce-server/internal/usecase/styleoperation"
-	sizeuc "stitchforce-server/internal/usecase/size"
 	useruc "stitchforce-server/internal/usecase/user"
 	"stitchforce-server/pkg/logger"
 )
@@ -19,6 +21,8 @@ type UseCases struct {
 	Style           usecase.StyleUseCase
 	StyleOperations usecase.StyleOperationUseCase
 	Size            usecase.SizeUseCase
+	Bundle          usecase.BundleUseCase
+	ProductionEntry usecase.ProductionEntryUseCase
 }
 
 func NewUseCases(
@@ -40,5 +44,7 @@ func NewUseCases(
 		Style:           styleuc.New(repositories.Style, log),
 		StyleOperations: styleopsuc.New(repositories.StyleOperations, log),
 		Size:            sizeuc.New(repositories.Sizes, log),
+		Bundle:          bundleuc.New(repositories.Bundles, log),
+		ProductionEntry: productionentryuc.New(repositories.ProductionEntry, repositories.Bundles, repositories.GarmentWorkers, repositories.StyleOperations, repositories.Style, log),
 	}
 }

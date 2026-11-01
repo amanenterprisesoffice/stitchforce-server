@@ -3,3 +3,6 @@ DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS organizations;
 DROP TABLE IF EXISTS style_operations;
 DROP TABLE IF EXISTS styles;
+DROP TABLE IF EXISTS bundles;
+DROP TABLE IF EXISTS production_entries;
+DROP TABLE IF EXISTS sizes;

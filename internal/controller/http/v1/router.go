@@ -17,6 +17,8 @@ func NewRouter(
 	styleUseCase usecase.StyleUseCase,
 	styleOperationUseCase usecase.StyleOperationUseCase,
 	sizeUseCase usecase.SizeUseCase,
+	bundleUseCase usecase.BundleUseCase,
+	productionEntryUseCase usecase.ProductionEntryUseCase,
 	log *logger.Logger,
 	jwtManager *jwt.Manager,
 	validate *validator.Validate,
@@ -28,10 +30,12 @@ func NewRouter(
 	)
 
 	userHandler := NewUserHandler(users, validate, jwtManager)
-	garmentWorkerHandler := NewGarmentWorkerHandler(garmentWorkers, validate)
 	styleHandler := NewStyleHandler(styleUseCase, validate)
 	styleOperationHandler := NewStyleOperationHandler(styleOperationUseCase, validate)
 	sizeHandler := NewSizeHandler(sizeUseCase, validate)
+	bundleHandler := NewBundleHandler(bundleUseCase, validate)
+	garmentWorkerHandler := NewGarmentWorkerHandler(garmentWorkers, validate)
+	productionEntryHandler := NewProductionEntryHandler(productionEntryUseCase, validate)
 
 	v1 := r.Group("/v1")
 	{
@@ -54,15 +58,6 @@ func NewRouter(
 			}
 			organizations := protected.Group("/organizations/:organizationID")
 			{
-				workers := organizations.Group("/garment-workers")
-				{
-					workers.POST("", garmentWorkerHandler.Create)
-					workers.GET("", garmentWorkerHandler.List)
-					workers.GET("/:id", garmentWorkerHandler.Get)
-					workers.PUT("/:id", garmentWorkerHandler.Update)
-					workers.PATCH("/:id/status", garmentWorkerHandler.SetStatus)
-					workers.DELETE("/:id", garmentWorkerHandler.Delete)
-				}
 
 				styles := organizations.Group("/styles")
 				{
@@ -89,6 +84,33 @@ func NewRouter(
 					sizes.GET("/:id", sizeHandler.Get)
 					sizes.PUT("/:id", sizeHandler.Update)
 					sizes.DELETE("/:id", sizeHandler.Delete)
+				}
+
+				bundles := organizations.Group("/bundles")
+				{
+					bundles.POST("", bundleHandler.Create)
+					bundles.GET("", bundleHandler.List)
+					bundles.GET("/:id", bundleHandler.Get)
+					bundles.PUT("/:id", bundleHandler.Update)
+					bundles.DELETE("/:id", bundleHandler.Delete)
+				}
+
+				workers := organizations.Group("/garment-workers")
+				{
+					workers.POST("", garmentWorkerHandler.Create)
+					workers.GET("", garmentWorkerHandler.List)
+					workers.GET("/:id", garmentWorkerHandler.Get)
+					workers.PUT("/:id", garmentWorkerHandler.Update)
+					workers.PATCH("/:id/status", garmentWorkerHandler.SetStatus)
+					workers.DELETE("/:id", garmentWorkerHandler.Delete)
+				}
+				productionEntries := organizations.Group("/production-entries")
+				{
+					productionEntries.POST("", productionEntryHandler.Create)
+					productionEntries.GET("", productionEntryHandler.List)
+					productionEntries.GET("/:id", productionEntryHandler.Get)
+					productionEntries.PUT("/:id", productionEntryHandler.Update)
+					productionEntries.DELETE("/:id", productionEntryHandler.Delete)
 				}
 			}
 		}

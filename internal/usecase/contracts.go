@@ -26,40 +26,6 @@ type UserUseCase interface {
 	Delete(context.Context, string) error
 }
 
-type GarmentWorkerUseCase interface {
-	Create(context.Context, string, *input.CreateGarmentWorkerInput) error
-
-	GetByID(
-		context.Context,
-		string, // organizationID
-		string, // workerID
-	) (*output.GarmentWorker, error)
-
-	List(
-		context.Context,
-		string, // organizationID
-	) ([]*output.GarmentWorker, error)
-
-	Update(
-		context.Context,
-		string, // organizationID
-		*entity.GarmentWorker,
-	) error
-
-	Delete(
-		context.Context,
-		string, // organizationID
-		string, // workerID
-	) error
-
-	SetStatus(
-		context.Context,
-		string, // organizationID
-		string, // workerID
-		string, // status
-	) error
-}
-
 type StyleUseCase interface {
 	Create(
 		context.Context,
@@ -155,5 +121,103 @@ type SizeUseCase interface {
 		context.Context,
 		string, // organizationID
 		string, // sizeID
+	) error
+}
+
+type BundleUseCase interface {
+	Create(
+		context.Context,
+		string, // organizationID
+		*entity.Bundle,
+	) error
+
+	GetByID(
+		context.Context,
+		string, // organizationID
+		string, // bundleID
+	) (*entity.Bundle, error)
+
+	List(
+		context.Context,
+		string, // organizationID
+	) ([]*entity.Bundle, error)
+
+	Update(
+		context.Context,
+		string, // organizationID
+		string, // bundleID
+		*input.UpdateBundleInput,
+	) error
+
+	Delete(
+		context.Context,
+		string, // organizationID
+		string, // bundleID
+	) error
+}
+
+type GarmentWorkerUseCase interface {
+	Create(context.Context, string, *input.CreateGarmentWorkerInput) error
+
+	GetByID(
+		context.Context,
+		string, // organizationID
+		string, // workerID
+	) (*output.GarmentWorker, error)
+
+	List(
+		context.Context,
+		string, // organizationID
+	) ([]*output.GarmentWorker, error)
+
+	Update(
+		context.Context,
+		string, // organizationID
+		*entity.GarmentWorker,
+	) error
+
+	Delete(
+		context.Context,
+		string, // organizationID
+		string, // workerID
+	) error
+
+	SetStatus(
+		context.Context,
+		string, // organizationID
+		string, // workerID
+		entity.WorkerStatus, // status
+	) error
+}
+
+
+type ProductionEntryUseCase interface {
+	Create(
+		context.Context,
+		string,
+		*entity.ProductionEntry,
+	) error
+
+	GetByID(
+		context.Context,
+		string,
+		string,
+	) (*output.ProductionEntry, error)
+
+	List(
+		context.Context,
+		string,
+	) ([]*output.ProductionEntry, error)
+
+	Update(
+		context.Context,
+		string,
+		*entity.ProductionEntry,
+	) error
+
+	Delete(
+		context.Context,
+		string,
+		string,
 	) error
 }

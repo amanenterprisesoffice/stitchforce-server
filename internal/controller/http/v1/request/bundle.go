@@ -1,24 +1,25 @@
-
 package request
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"stitchforce-server/internal/entity"
+)
 
 type CreateBundle struct {
-    BundleNumber string          `form:"bundle_number" json:"bundle_number" binding:"required,min=1,max=100"`
-    StyleID      string          `form:"style_id" json:"style_id" binding:"required"`
-    SizeID       string          `form:"size_id" json:"size_id" binding:"required"`
-    Quantity     int             `form:"quantity" json:"quantity" binding:"required,gt=0"`
-    Attributes   json.RawMessage `form:"attributes" json:"attributes"`
-    Status       string          `form:"status" json:"status" binding:"omitempty,oneof=created ready"`
-    Remarks      string          `form:"remarks" json:"remarks" binding:"omitempty,max=1000"`
+	BundleNumber string              `json:"bundle_number" validate:"required,min=1,max=100"`
+	StyleID      string              `json:"style_id" validate:"required"`
+	SizeID       string              `json:"size_id" validate:"required"`
+	Quantity     int                 `json:"quantity" validate:"required,gt=0"`
+	Attributes   json.RawMessage     `json:"attributes" validate:"omitempty"`
+	Status       entity.BundleStatus `json:"status" validate:"omitempty,oneof=created ready"`
+	Remarks      string              `json:"remarks" validate:"omitempty,max=1000"`
 }
 
 type UpdateBundle struct {
-    BundleNumber string          `form:"bundle_number" json:"bundle_number" binding:"required,min=1,max=100"`
-    StyleID      string          `form:"style_id" json:"style_id" binding:"required"`
-    SizeID       string          `form:"size_id" json:"size_id" binding:"required"`
-    Quantity     int             `form:"quantity" json:"quantity" binding:"required,gt=0"`
-    Attributes   json.RawMessage `form:"attributes" json:"attributes"`
-    Status       string          `form:"status" json:"status" binding:"omitempty,oneof=created ready"`
-    Remarks      string          `form:"remarks" json:"remarks" binding:"omitempty,max=1000"`
+    BundleNumber *string              `json:"bundle_number" validate:"omitempty,min=1,max=100"`
+    SizeID       *string              `json:"size_id" validate:"omitempty"`
+    Quantity     *int                 `json:"quantity" validate:"omitempty,gt=0"`
+    Attributes   *json.RawMessage     `json:"attributes" validate:"omitempty"`
+    Status       *entity.BundleStatus `json:"status" validate:"omitempty,oneof=created ready"`
+    Remarks      *string              `json:"remarks" validate:"omitempty,max=1000"`
 }

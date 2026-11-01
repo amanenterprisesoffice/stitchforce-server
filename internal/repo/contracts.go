@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"stitchforce-server/internal/entity"
+	"stitchforce-server/internal/usecase/input"
 )
 
 var ErrNotFound = errors.New("not found")
@@ -28,45 +29,6 @@ type UserRepository interface {
 		context.Context,
 		*entity.Organization,
 		*entity.User,
-	) error
-}
-
-// type GarmentWorkerRepository interface {
-// 	Create(context.Context, *entity.GarmentWorker) error
-// 	GetByID(context.Context, string) (*entity.GarmentWorker, error)
-// 	List(context.Context) ([]*entity.GarmentWorker, error)
-// 	Update(context.Context, *entity.GarmentWorker) error
-// 	Delete(context.Context, string) error
-// }
-
-type GarmentWorkerRepository interface {
-	Create(
-		context.Context,
-		string, // organizationID
-		*entity.GarmentWorker,
-	) error
-
-	GetByID(
-		context.Context,
-		string, // organizationID
-		string, // workerID
-	) (*entity.GarmentWorker, error)
-
-	List(
-		context.Context,
-		string, // organizationID
-	) ([]*entity.GarmentWorker, error)
-
-	Update(
-		context.Context,
-		string, // organizationID
-		*entity.GarmentWorker,
-	) error
-
-	Delete(
-		context.Context,
-		string, // organizationID
-		string, // workerID
 	) error
 }
 
@@ -127,4 +89,100 @@ type SizeRepository interface {
 		string, // organizationID
 		string, // sizeID
 	) error
+}
+
+type BundleRepository interface {
+	Create(
+		context.Context,
+		string, // organizationID
+		*entity.Bundle,
+	) error
+
+	GetByID(
+		context.Context,
+		string, // organizationID
+		string, // bundleID
+	) (*entity.Bundle, error)
+
+	List(
+		context.Context,
+		string, // organizationID
+	) ([]*entity.Bundle, error)
+
+	Update(
+		context.Context,
+		string, // organizationID
+		string, // bundleID
+		*input.UpdateBundleInput,
+	) error
+
+	Delete(
+		context.Context,
+		string, // organizationID
+		string, // bundleID
+	) error
+}
+
+
+type GarmentWorkerRepository interface {
+	Create(
+		context.Context,
+		string, // organizationID
+		*entity.GarmentWorker,
+	) error
+
+	GetByID(
+		context.Context,
+		string, // organizationID
+		string, // workerID
+	) (*entity.GarmentWorker, error)
+
+	List(
+		context.Context,
+		string, // organizationID
+	) ([]*entity.GarmentWorker, error)
+
+	Update(
+		context.Context,
+		string, // organizationID
+		*entity.GarmentWorker,
+	) error
+
+	Delete(
+		context.Context,
+		string, // organizationID
+		string, // workerID
+	) error
+}
+
+
+type ProductionEntryRepository interface {
+    CreateWithBundleLimit(
+        context.Context,
+        string, // organizationID
+        *entity.ProductionEntry,
+    ) error
+
+    GetByID(
+        context.Context,
+        string, // organizationID
+        string, // productionEntryID
+    ) (*entity.ProductionEntry, error)
+
+    List(
+        context.Context,
+        string, // organizationID
+    ) ([]*entity.ProductionEntry, error)
+
+    UpdateWithBundleLimit(
+        context.Context,
+        string, // organizationID
+        *entity.ProductionEntry,
+    ) error
+
+    Delete(
+        context.Context,
+        string, // organizationID
+        string, // productionEntryID
+    ) error
 }
