@@ -3,11 +3,11 @@ package output
 import "time"
 
 type ProductionEntry struct {
-	ID               string    `json:"id"`
-	OrganizationID   string    `json:"organization_id"`
-	BundleID         string    `json:"bundle_id"`
-	WorkerID         string    `json:"worker_id"`
-	StyleOperationID string    `json:"style_operation_id"`
+	ID               string `json:"id"`
+	OrganizationID   string `json:"organization_id"`
+	BundleID         string `json:"bundle_id"`
+	WorkerID         string `json:"worker_id"`
+	StyleOperationID string `json:"style_operation_id"`
 
 	Quantity     int   `json:"quantity"`
 	RatePerPiece int64 `json:"rate_per_piece"`
@@ -26,9 +26,10 @@ type ProductionEntry struct {
 }
 
 type ProductionEntryWorker struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Phone string `json:"phone"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Phone    string `json:"phone"`
+	PhotoURL string `json:"photo_url,omitempty"`
 }
 
 type ProductionEntryBundle struct {

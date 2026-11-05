@@ -233,10 +233,6 @@ func (u *UseCase) Update(
 		return err
 	}
 
-	if err := ucutils.ValidateWorkerStatus(worker.Status); err != nil {
-		return err
-	}
-
 	u.logger.InfoContext(
 		ctx,
 		"updating garment worker",

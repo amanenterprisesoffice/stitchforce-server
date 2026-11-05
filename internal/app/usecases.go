@@ -45,6 +45,6 @@ func NewUseCases(
 		StyleOperations: styleopsuc.New(repositories.StyleOperations, log),
 		Size:            sizeuc.New(repositories.Sizes, log),
 		Bundle:          bundleuc.New(repositories.Bundles, log),
-		ProductionEntry: productionentryuc.New(repositories.ProductionEntry, repositories.Bundles, repositories.GarmentWorkers, repositories.StyleOperations, repositories.Style, log),
+		ProductionEntry: productionentryuc.New(repositories.ProductionEntry, repositories.Bundles, repositories.GarmentWorkers, repositories.StyleOperations, repositories.Style, storage, log),
 	}
 }

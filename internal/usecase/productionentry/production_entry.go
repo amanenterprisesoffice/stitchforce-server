@@ -9,6 +9,7 @@ import (
 
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/repo"
+	"stitchforce-server/internal/storage"
 	"stitchforce-server/internal/usecase"
 	"stitchforce-server/internal/usecase/output"
 	"stitchforce-server/internal/usecase/utils"
@@ -22,6 +23,7 @@ type UseCase struct {
 	workerRepository         repo.GarmentWorkerRepository
 	styleOperationRepository repo.StyleOperationRepository
 	styleRepository          repo.StyleRepository
+	storage                  storage.Storage
 	logger                   *logger.Logger
 }
 
@@ -31,6 +33,7 @@ func New(
 	workerRepository repo.GarmentWorkerRepository,
 	styleOperationRepository repo.StyleOperationRepository,
 	styleRepository repo.StyleRepository,
+	storage storage.Storage,
 	logger *logger.Logger,
 ) usecase.ProductionEntryUseCase {
 	return &UseCase{
@@ -40,6 +43,7 @@ func New(
 		styleOperationRepository: styleOperationRepository,
 		styleRepository:          styleRepository,
 		logger:                   logger,
+		storage:                  storage,
 	}
 }
 
@@ -494,6 +498,18 @@ func (u *UseCase) buildOutput(
 		return nil, errors.New("production worker not found")
 	}
 
+	var photoURL string
+	if strings.TrimSpace(worker.PhotoKey) != "" {
+		photoURL, err = u.storage.SignedURL(
+			ctx,
+			worker.PhotoKey,
+			15*time.Minute,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("generate worker photo URL: %w", err)
+		}
+	}
+
 	// Get style.
 	style, err := u.styleRepository.GetByID(
 		ctx,
@@ -540,9 +556,10 @@ func (u *UseCase) buildOutput(
 		Remarks:        entry.Remarks,
 
 		Worker: output.ProductionEntryWorker{
-			ID:    worker.ID,
-			Name:  worker.Name,
-			Phone: worker.Phone,
+			ID:       worker.ID,
+			Name:     worker.Name,
+			Phone:    worker.Phone,
+			PhotoURL: photoURL,
 		},
 
 		Bundle: output.ProductionEntryBundle{

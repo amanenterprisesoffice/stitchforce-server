@@ -81,9 +81,9 @@ func (r *Repository) GetByID(
 			id,
 			organization_id,
 			name,
-			phone,
-			gender,
-			photo_key,
+			COALESCE(phone, ''),
+			COALESCE(gender, ''),
+			COALESCE(photo_key, ''),
 			status,
 			created_at,
 			updated_at,
@@ -139,9 +139,9 @@ func (r *Repository) List(
 			id,
 			organization_id,
 			name,
-			phone,
-			gender,
-			photo_key,
+			COALESCE(phone, ''),
+			COALESCE(gender, ''),
+			COALESCE(photo_key, ''),
 			status,
 			created_at,
 			updated_at,
@@ -206,11 +206,11 @@ func (r *Repository) Update(
 	query := `
 		UPDATE garment_workers
 		SET
-			name = $3,
-			phone = $4,
-			gender = $5,
-			photo_key = $6,
-			status = $7,
+			name = COALESCE(NULLIF($3, ''), name),
+			phone = COALESCE(NULLIF($4, ''), phone),
+			gender = COALESCE(NULLIF($5, ''), gender),
+			photo_key = COALESCE(NULLIF($6, ''), photo_key),
+			status = COALESCE(NULLIF($7, ''), status),
 			updated_at = NOW()
 		WHERE id = $1
 		  AND organization_id = $2
@@ -226,7 +226,7 @@ func (r *Repository) Update(
 		worker.Phone,
 		worker.Gender,
 		worker.PhotoKey,
-		worker.Status,
+		string(worker.Status),
 	)
 	if err != nil {
 		return err
@@ -243,7 +243,6 @@ func (r *Repository) Update(
 
 	return nil
 }
-
 // =========================================
 // SOFT DELETE
 // =========================================
