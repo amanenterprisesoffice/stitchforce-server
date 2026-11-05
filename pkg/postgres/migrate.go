@@ -5,35 +5,25 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net/url"
-	"os"
-	"path/filepath"
+
+	embeddedmigrations "stitchforce-server/migrations"
 
 	migrate "github.com/golang-migrate/migrate/v4"
 	migratepostgres "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 )
 
 func Migrate(db *sql.DB, migrationsPath string) error {
-	absolutePath, err := filepath.Abs(migrationsPath)
+	// migrationsPath is retained for backward compatibility.
+	// Migrations are now embedded in the binary.
+
+	fmt.Println("Running embedded database migrations...")
+
+	source, err := iofs.New(embeddedmigrations.FS, ".")
 	if err != nil {
-		return fmt.Errorf("resolve migration path: %w", err)
+		return fmt.Errorf("create embedded migration source: %w", err)
 	}
-
-	info, err := os.Stat(absolutePath)
-	if err != nil {
-		return fmt.Errorf("migration directory %q: %w", absolutePath, err)
-	}
-	if !info.IsDir() {
-		return fmt.Errorf("migration path %q is not a directory", absolutePath)
-	}
-
-	fmt.Printf("Running database migrations from: %s\n", absolutePath)
-
-	sourceURL := (&url.URL{
-		Scheme: "file",
-		Path:   filepath.ToSlash(absolutePath),
-	}).String()
+	defer source.Close()
 
 	driver, err := migratepostgres.WithInstance(
 		db,
@@ -46,52 +36,45 @@ func Migrate(db *sql.DB, migrationsPath string) error {
 	var host, dbName, schema string
 
 	err = db.QueryRow(`
-    SELECT
-        current_database(),
-        current_schema(),
-        inet_server_addr()::text
-`).Scan(&dbName, &schema, &host)
+		SELECT
+			current_database(),
+			current_schema(),
+			inet_server_addr()::text
+	`).Scan(&dbName, &schema, &host)
 
 	if err != nil {
-		log.Println("failed to identify database", "error", err)
-		return nil
+		return fmt.Errorf("identify connected database: %w", err)
 	}
 
-	log.Println("connected database",
+	log.Println(
+		"Connected database",
 		"database", dbName,
 		"schema", schema,
 		"server", host,
 	)
 
-	m, err := migrate.NewWithDatabaseInstance(
-		sourceURL,
+	m, err := migrate.NewWithInstance(
+		"iofs",
+		source,
 		"postgres",
 		driver,
 	)
 	if err != nil {
-		_ = driver.Close()
 		return fmt.Errorf("initialize migrations: %w", err)
 	}
-// 	defer func() {
-//     sourceErr, databaseErr := m.Close()
-
-//     if sourceErr != nil {
-//         log.Println("migration source close error:", sourceErr)
-//     }
-//     if databaseErr != nil {
-//         log.Println("migration database close error:", databaseErr)
-//     }
-// }()
 
 	err = m.Up()
+
 	if errors.Is(err, migrate.ErrNoChange) {
 		fmt.Println("Database schema is already up to date.")
 		return nil
 	}
+
 	if err != nil {
 		return fmt.Errorf("apply migrations: %w", err)
 	}
 
 	fmt.Println("Database migrations completed successfully.")
+
 	return nil
 }
