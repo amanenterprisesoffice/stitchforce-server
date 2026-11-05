@@ -61,7 +61,7 @@ func Load() Config {
 	return Config{
 		App: AppConfig{
 			Name:            env("APP_NAME", "stitchforce-server"),
-			Port:            env("APP_PORT", "8080"),
+			Port:            env("PORT", "8080"),
 			ShutdownTimeout: durationEnv("APP_SHUTDOWN_TIMEOUT", 10*time.Second),
 		},
 		Postgres: PostgresConfig{
