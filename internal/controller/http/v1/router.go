@@ -29,6 +29,17 @@ func NewRouter(
 		middleware.RequestLogger(log),
 	)
 
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "Welcome to StitchForce API",
+		})
+	})
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "ok",
+		})
+	})
+
 	userHandler := NewUserHandler(users, validate, jwtManager)
 	styleHandler := NewStyleHandler(styleUseCase, validate)
 	styleOperationHandler := NewStyleOperationHandler(styleOperationUseCase, validate)
