@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/repo"
@@ -148,19 +149,83 @@ func (r *Repository) GetByID(
 func (r *Repository) List(
 	ctx context.Context,
 	organizationID string,
+	filter input.BundleFilter,
 ) ([]*entity.Bundle, error) {
+
 	query := `
-        SELECT ` + selectColumns + `
-        FROM bundles
-        WHERE organization_id = $1
-        AND deleted_at IS NULL
-        ORDER BY created_at DESC
-    `
+		SELECT ` + selectColumns + `
+		FROM bundles
+		WHERE organization_id = $1
+		  AND deleted_at IS NULL
+	`
+
+	args := []any{organizationID}
+	argPosition := 2
+
+	if filter.Search != "" {
+		query += fmt.Sprintf(" AND bundle_number ILIKE $%d", argPosition)
+		args = append(args, "%"+filter.Search+"%")
+		argPosition++
+	}
+
+	if filter.StyleID != "" {
+		query += fmt.Sprintf(" AND style_id = $%d", argPosition)
+		args = append(args, filter.StyleID)
+		argPosition++
+	}
+
+	if filter.SizeID != "" {
+		query += fmt.Sprintf(" AND size_id = $%d", argPosition)
+		args = append(args, filter.SizeID)
+		argPosition++
+	}
+
+	if filter.Status != "" {
+		query += fmt.Sprintf(" AND status = $%d", argPosition)
+		args = append(args, filter.Status)
+		argPosition++
+	}
+
+	if filter.CreatedFrom != nil {
+		query += fmt.Sprintf(" AND created_at >= $%d", argPosition)
+		args = append(args, *filter.CreatedFrom)
+		argPosition++
+	}
+
+	if filter.CreatedTo != nil {
+		query += fmt.Sprintf(" AND created_at < $%d", argPosition)
+		args = append(args, *filter.CreatedTo)
+		argPosition++
+	}
+
+	query += " ORDER BY created_at DESC"
+
+	// Pagination.
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query += fmt.Sprintf(
+		" LIMIT $%d OFFSET $%d",
+		argPosition,
+		argPosition+1,
+	)
+
+	args = append(args, limit, offset)
 
 	rows, err := r.db.QueryContext(
 		ctx,
 		query,
-		organizationID,
+		args...,
 	)
 	if err != nil {
 		return nil, err

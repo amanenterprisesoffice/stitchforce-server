@@ -54,6 +54,7 @@ type StyleOperationRepository interface {
 		context.Context,
 		string, // organizationID
 		string, // styleID
+		input.StyleOperationFilter,
 	) ([]*entity.StyleOperation, error)
 
 	Update(context.Context, string, string, *entity.StyleOperation) error
@@ -107,6 +108,7 @@ type BundleRepository interface {
 	List(
 		context.Context,
 		string, // organizationID
+		input.BundleFilter,
 	) ([]*entity.Bundle, error)
 
 	Update(
@@ -140,6 +142,7 @@ type GarmentWorkerRepository interface {
 	List(
 		context.Context,
 		string, // organizationID
+		input.GarmentWorkerFilter,
 	) ([]*entity.GarmentWorker, error)
 
 	Update(
@@ -172,6 +175,7 @@ type ProductionEntryRepository interface {
     List(
         context.Context,
         string, // organizationID
+		input.ProductionEntryFilter,
     ) ([]*entity.ProductionEntry, error)
 
     UpdateWithBundleLimit(

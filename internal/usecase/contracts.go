@@ -76,6 +76,7 @@ type StyleOperationUseCase interface {
 		context.Context,
 		string, // organizationID
 		string, // styleID
+		input.StyleOperationFilter,
 	) ([]*entity.StyleOperation, error)
 
 	Update(
@@ -140,6 +141,7 @@ type BundleUseCase interface {
 	List(
 		context.Context,
 		string, // organizationID
+		 input.BundleFilter,
 	) ([]*entity.Bundle, error)
 
 	Update(
@@ -168,6 +170,7 @@ type GarmentWorkerUseCase interface {
 	List(
 		context.Context,
 		string, // organizationID
+		input.GarmentWorkerFilter,
 	) ([]*output.GarmentWorker, error)
 
 	Update(
@@ -207,6 +210,7 @@ type ProductionEntryUseCase interface {
 	List(
 		context.Context,
 		string,
+		 input.ProductionEntryFilter,
 	) ([]*output.ProductionEntry, error)
 
 	Update(

@@ -311,6 +311,14 @@ CREATE TABLE production_entries (
         ON DELETE RESTRICT
 );
 
+CREATE UNIQUE INDEX idx_production_entries_bundle_operation
+ON production_entries (
+    organization_id,
+    bundle_id,
+    style_operation_id
+)
+WHERE deleted_at IS NULL;
+
 -- =========================================
 -- END OF SCHEMA
 -- =========================================

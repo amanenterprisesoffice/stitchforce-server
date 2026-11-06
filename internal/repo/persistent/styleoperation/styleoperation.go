@@ -1,13 +1,14 @@
-
 package styleoperation
 
 import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/repo"
+	"stitchforce-server/internal/usecase/input"
 )
 
 type Repository struct {
@@ -100,6 +101,7 @@ func (r *Repository) List(
 	ctx context.Context,
 	organizationID string,
 	styleID string,
+	filter input.StyleOperationFilter,
 ) ([]*entity.StyleOperation, error) {
 	query := `
 		SELECT
@@ -113,15 +115,40 @@ func (r *Repository) List(
 		FROM style_operations
 		WHERE organization_id = $1
 		  AND style_id = $2
-		ORDER BY created_at ASC
 	`
 
-	rows, err := r.db.QueryContext(
-		ctx,
-		query,
-		organizationID,
-		styleID,
+	args := []any{organizationID, styleID}
+	argPosition := 3
+
+	if filter.Search != "" {
+		query += fmt.Sprintf(" AND name ILIKE $%d", argPosition)
+		args = append(args, "%"+filter.Search+"%")
+		argPosition++
+	}
+
+	query += " ORDER BY created_at ASC"
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query += fmt.Sprintf(
+		" LIMIT $%d OFFSET $%d",
+		argPosition,
+		argPosition+1,
 	)
+	args = append(args, limit, offset)
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

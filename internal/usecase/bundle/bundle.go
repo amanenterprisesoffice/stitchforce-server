@@ -105,6 +105,7 @@ func (u *UseCase) GetByID(
 func (u *UseCase) List(
 	ctx context.Context,
 	organizationID string,
+	filter input.BundleFilter,
 ) ([]*entity.Bundle, error) {
 	organizationID, err := ucutils.ValidateOrganizationID(organizationID)
 	if err != nil {
@@ -114,6 +115,7 @@ func (u *UseCase) List(
 	return u.repository.List(
 		ctx,
 		organizationID,
+		filter,
 	)
 }
 

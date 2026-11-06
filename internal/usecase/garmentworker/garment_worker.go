@@ -180,6 +180,7 @@ func (u *UseCase) GetByID(
 func (u *UseCase) List(
 	ctx context.Context,
 	organizationID string,
+	filter input.GarmentWorkerFilter,
 ) ([]*output.GarmentWorker, error) {
 
 	organizationID, err := ucutils.ValidateOrganizationID(organizationID)
@@ -187,7 +188,7 @@ func (u *UseCase) List(
 		return nil, err
 	}
 
-	workers, err := u.repository.List(ctx, organizationID)
+	workers, err := u.repository.List(ctx, organizationID, filter)
 	if err != nil {
 		return nil, err
 	}

@@ -2,6 +2,8 @@ package v1
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
 
 	"stitchforce-server/internal/controller/http/v1/request"
 	"stitchforce-server/internal/entity"
@@ -115,9 +117,54 @@ func (h *GarmentWorkerHandler) Get(c *gin.Context) {
 func (h *GarmentWorkerHandler) List(c *gin.Context) {
 	organizationID := c.Param("organizationID")
 
+	if organizationID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "organization id is required",
+		})
+		return
+	}
+
+	// Query parameter keys for filtering and pagination
+	const (
+		Search = "search"
+		Status = "status"
+		Limit  = "limit"
+		Offset = "offset"
+	)
+	
+	filter := input.GarmentWorkerFilter{
+		Status: c.Query(Status),
+		Search: strings.TrimSpace(c.Query(Search)),
+		Limit:  20,
+		Offset: 0,
+	}
+
+	if limit := c.Query(Limit); limit != "" {
+		value, err := strconv.Atoi(limit)
+		if err != nil || value <= 0 || value > 100 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "limit must be between 1 and 100",
+			})
+			return
+		}
+		filter.Limit = value
+	}
+
+	if offset := c.Query(Offset); offset != "" {
+		value, err := strconv.Atoi(offset)
+		if err != nil || value < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "offset must be a non-negative integer",
+			})
+			return
+		}
+		filter.Offset = value
+	}
+
 	workers, err := h.workers.List(
 		c.Request.Context(),
 		organizationID,
+		filter,
 	)
 	if err != nil {
 		writeError(c, err)

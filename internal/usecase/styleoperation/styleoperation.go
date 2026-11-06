@@ -8,6 +8,7 @@ import (
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/repo"
 	"stitchforce-server/internal/usecase"
+	"stitchforce-server/internal/usecase/input"
 	ucutils "stitchforce-server/internal/usecase/utils"
 	"stitchforce-server/pkg/logger"
 	"stitchforce-server/pkg/utils"
@@ -110,6 +111,7 @@ func (u *UseCase) List(
 	ctx context.Context,
 	organizationID string,
 	styleID string,
+	filter input.StyleOperationFilter,
 ) ([]*entity.StyleOperation, error) {
 	var err error
 
@@ -123,7 +125,7 @@ func (u *UseCase) List(
 		return nil, err
 	}
 
-	return u.repository.List(ctx, organizationID, styleID)
+	return u.repository.List(ctx, organizationID, styleID, filter)
 }
 
 func (u *UseCase) Update(

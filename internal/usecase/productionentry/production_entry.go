@@ -11,6 +11,7 @@ import (
 	"stitchforce-server/internal/repo"
 	"stitchforce-server/internal/storage"
 	"stitchforce-server/internal/usecase"
+	"stitchforce-server/internal/usecase/input"
 	"stitchforce-server/internal/usecase/output"
 	"stitchforce-server/internal/usecase/utils"
 	"stitchforce-server/pkg/logger"
@@ -48,7 +49,6 @@ func New(
 }
 
 // CREATE
-
 func (u *UseCase) Create(
 	ctx context.Context,
 	organizationID string,
@@ -69,11 +69,7 @@ func (u *UseCase) Create(
 	entry.StyleOperationID = strings.TrimSpace(entry.StyleOperationID)
 	entry.Remarks = strings.TrimSpace(entry.Remarks)
 
-	if err := utils.ValidateProductionEntry(entry); err != nil {
-		return err
-	}
-
-	// Validate bundle.
+	// 1. Validate bundle.
 	bundle, err := u.bundleRepository.GetByID(
 		ctx,
 		organizationID,
@@ -87,12 +83,17 @@ func (u *UseCase) Create(
 		return errors.New("bundle not found")
 	}
 
-	// Validate bundle status.
-	if bundle.Status != "ready" && bundle.Status != "in_progress" {
+	if bundle.Quantity <= 0 {
+		return errors.New("bundle quantity must be greater than zero")
+	}
+
+	// 2. Validate bundle status.
+	if bundle.Status != entity.BundleStatusReady &&
+		bundle.Status != entity.BundleStatusInProgress {
 		return errors.New("production can only be recorded for ready or in-progress bundles")
 	}
 
-	// Validate worker.
+	// 3. Validate worker.
 	worker, err := u.workerRepository.GetByID(
 		ctx,
 		organizationID,
@@ -107,10 +108,10 @@ func (u *UseCase) Create(
 	}
 
 	if worker.Status != entity.WorkerStatusActive {
-		return errors.New("inactive workers cannot record production")
+		return errors.New("production can only be recorded for active workers")
 	}
 
-	// Fetch style operation.
+	// 4. Fetch style operation.
 	operation, err := u.styleOperationRepository.GetByID(
 		ctx,
 		organizationID,
@@ -125,16 +126,24 @@ func (u *UseCase) Create(
 		return errors.New("style operation not found")
 	}
 
-	// Ensure operation belongs to the bundle's style.
+	// 5. Ensure operation belongs to the bundle's style.
 	if operation.StyleID != bundle.StyleID {
 		return errors.New("style operation does not belong to the bundle's style")
 	}
 
-	// Snapshot operation rate.
+	// 6. Automatically assign full bundle quantity.
+	entry.Quantity = bundle.Quantity
+
+	// 7. Snapshot operation rate.
 	// Never accept this value from the frontend.
 	entry.RatePerPiece = operation.RatePerPiece
 
-	// Generate ID.
+	// 8. Validate production entry.
+	if err := utils.ValidateProductionEntry(entry); err != nil {
+		return err
+	}
+
+	// 9. Generate ID.
 	id, err := appUtils.NewID()
 	if err != nil {
 		return fmt.Errorf("generate production entry ID: %w", err)
@@ -159,12 +168,15 @@ func (u *UseCase) Create(
 		"rate_per_piece", entry.RatePerPiece,
 	)
 
-	// Repository atomically:
-	// 1. Locks the bundle.
-	// 2. Verifies bundle quantity.
-	// 3. Verifies worker is active.
-	// 4. Verifies operation belongs to the bundle's style.
-	// 5. Inserts the production entry.
+	// 10. Repository atomically:
+	// - Locks the bundle.
+	// - Verifies bundle status.
+	// - Verifies worker is active.
+	// - Verifies operation belongs to the bundle's style.
+	// - Verifies operation rate.
+	// - Ensures one entry per bundle operation.
+	// - Inserts the full bundle quantity.
+
 	if err := u.repository.CreateWithBundleLimit(
 		ctx,
 		organizationID,
@@ -225,6 +237,7 @@ func (u *UseCase) GetByID(
 func (u *UseCase) List(
 	ctx context.Context,
 	organizationID string,
+	filter input.ProductionEntryFilter,
 ) ([]*output.ProductionEntry, error) {
 
 	organizationID, err := utils.ValidateOrganizationID(organizationID)
@@ -235,6 +248,7 @@ func (u *UseCase) List(
 	entries, err := u.repository.List(
 		ctx,
 		organizationID,
+		filter,
 	)
 	if err != nil {
 		return nil, err

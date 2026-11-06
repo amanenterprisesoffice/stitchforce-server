@@ -2,6 +2,9 @@ package v1
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -9,7 +12,10 @@ import (
 	"stitchforce-server/internal/controller/http/v1/request"
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/usecase"
+	"stitchforce-server/internal/usecase/input"
 )
+
+const DateLayout = "2006-01-02"
 
 type ProductionEntryHandler struct {
 	productionEntries usecase.ProductionEntryUseCase
@@ -54,7 +60,6 @@ func (h *ProductionEntryHandler) Create(c *gin.Context) {
 		BundleID:         req.BundleID,
 		WorkerID:         req.WorkerID,
 		StyleOperationID: req.StyleOperationID,
-		Quantity:         req.Quantity,
 		ProductionDate:   req.ProductionDate,
 		Remarks:          req.Remarks,
 	}
@@ -112,9 +117,84 @@ func (h *ProductionEntryHandler) List(c *gin.Context) {
 		return
 	}
 
+	// Query parameter keys for filtering and pagination
+	const (
+		Search           = "search"
+		BundleID         = "bundle_id"
+		WorkerID         = "worker_id"
+		StyleID          = "style_id"
+		StyleOperationID = "style_operation_id"
+		Limit            = "limit"
+		Offset           = "offset"
+		FromDate         = "from_date"
+		ToDate           = "to_date"
+	)
+
+	filter := input.ProductionEntryFilter{
+		Search:           strings.TrimSpace(c.Query(Search)),
+		BundleID:         c.Query(BundleID),
+		WorkerID:         c.Query(WorkerID),
+		StyleID:          c.Query(StyleID),
+		StyleOperationID: c.Query(StyleOperationID),
+		Limit:            20,
+		Offset:           0,
+	}
+
+	// Parse limit.
+	if value := c.Query(Limit); value != "" {
+		limit, err := strconv.Atoi(value)
+		if err != nil || limit <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "invalid limit",
+			})
+			return
+		}
+		filter.Limit = limit
+	}
+
+	// Parse offset.
+	if value := c.Query(Offset); value != "" {
+		offset, err := strconv.Atoi(value)
+		if err != nil || offset < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "invalid offset",
+			})
+			return
+		}
+		filter.Offset = offset
+	}
+
+	// Parse from_date.
+	if value := c.Query(FromDate); value != "" {
+		date, err := time.Parse(DateLayout, value)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "invalid from_date; expected YYYY-MM-DD",
+			})
+			return
+		}
+
+		filter.FromDate = &date
+	}
+
+	// Parse to_date (inclusive).
+	if value := c.Query(ToDate); value != "" {
+		date, err := time.Parse(DateLayout, value)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "invalid to_date; expected YYYY-MM-DD",
+			})
+			return
+		}
+
+		date = date.AddDate(0, 0, 1)
+		filter.ToDate = &date
+	}
+
 	entries, err := h.productionEntries.List(
 		c.Request.Context(),
 		organizationID,
+		filter,
 	)
 
 	if err != nil {

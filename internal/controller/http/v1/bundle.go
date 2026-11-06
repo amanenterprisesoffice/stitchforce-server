@@ -2,6 +2,9 @@ package v1
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -116,9 +119,78 @@ func (h *BundleHandler) List(c *gin.Context) {
 		return
 	}
 
+	// Query parameter keys for filtering and pagination
+	const (
+		Search      = "search"
+		StyleID     = "style_id"
+		SizeID      = "size_id"
+		Status      = "status"
+		Limit       = "limit"
+		Offset      = "offset"
+		CreatedFrom = "created_from"
+		CreatedTo   = "created_to"
+	)
+
+	filter := input.BundleFilter{
+		Search:  strings.TrimSpace(c.Query(Search)),
+		StyleID: c.Query(StyleID),
+		SizeID:  c.Query(SizeID),
+		Status:  c.Query(Status),
+		Limit:   20,
+		Offset:  0,
+	}
+
+	if limit := c.Query(Limit); limit != "" {
+		value, err := strconv.Atoi(limit)
+		if err != nil || value <= 0 || value > 100 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "limit must be between 1 and 100",
+			})
+			return
+		}
+		filter.Limit = value
+	}
+
+	if offset := c.Query(Offset); offset != "" {
+		value, err := strconv.Atoi(offset)
+		if err != nil || value < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "offset must be a non-negative integer",
+			})
+			return
+		}
+		filter.Offset = value
+	}
+
+	if createdFrom := c.Query(CreatedFrom); createdFrom != "" {
+		date, err := time.Parse(DateLayout, createdFrom)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "created_from must be in YYYY-MM-DD format",
+			})
+			return
+		}
+		filter.CreatedFrom = &date
+	}
+
+	if createdTo := c.Query(CreatedTo); createdTo != "" {
+		date, err := time.Parse(DateLayout, createdTo)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "created_to must be in YYYY-MM-DD format",
+			})
+			return
+		}
+
+		// Make the end date inclusive.
+		date = date.AddDate(0, 0, 1)
+		filter.CreatedTo = &date
+	}
+
 	bundles, err := h.bundles.List(
 		c.Request.Context(),
 		organizationID,
+		filter,
 	)
 	if err != nil {
 		writeError(c, err)
