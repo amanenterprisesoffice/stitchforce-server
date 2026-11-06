@@ -42,6 +42,7 @@ type StyleUseCase interface {
 	List(
 		context.Context,
 		string, // organizationID
+		input.StyleFilter,
 	) ([]*entity.Style, error)
 
 	Update(

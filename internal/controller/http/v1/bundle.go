@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -142,9 +143,9 @@ func (h *BundleHandler) List(c *gin.Context) {
 
 	if limit := c.Query(Limit); limit != "" {
 		value, err := strconv.Atoi(limit)
-		if err != nil || value <= 0 || value > 100 {
+		if err != nil || value <= 0 || value > MaxPaginationLimit {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "limit must be between 1 and 100",
+				"error": fmt.Sprintf("limit must be between 1 and %d", MaxPaginationLimit),
 			})
 			return
 		}

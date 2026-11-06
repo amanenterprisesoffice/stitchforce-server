@@ -8,9 +8,10 @@ import (
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/repo"
 	"stitchforce-server/internal/usecase"
+	"stitchforce-server/internal/usecase/input"
+	ucutils "stitchforce-server/internal/usecase/utils"
 	"stitchforce-server/pkg/logger"
 	"stitchforce-server/pkg/utils"
-	ucutils "stitchforce-server/internal/usecase/utils"
 )
 
 type UseCase struct {
@@ -87,13 +88,14 @@ func (u *UseCase) GetByID(
 func (u *UseCase) List(
 	ctx context.Context,
 	organizationID string,
+	filter input.StyleFilter,
 ) ([]*entity.Style, error) {
 	organizationID, err := ucutils.ValidateOrganizationID(organizationID)
 	if err != nil {
 		return nil, err
 	}
 
-	return u.repository.List(ctx, organizationID)
+	return u.repository.List(ctx, organizationID, filter)
 }
 
 func (u *UseCase) Update(

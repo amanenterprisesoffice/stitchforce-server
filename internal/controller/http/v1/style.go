@@ -1,11 +1,15 @@
 package v1
 
 import (
+	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"stitchforce-server/internal/controller/http/v1/request"
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/usecase"
+	"stitchforce-server/internal/usecase/input"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -84,10 +88,44 @@ func (h *StyleHandler) Get(c *gin.Context) {
 func (h *StyleHandler) List(c *gin.Context) {
 	organizationID := c.Param("organizationID")
 
+	// Style Ops Query parameter keys for filtering style operations
+	const (
+		Search = "search"
+		Limit  = "limit"
+		Offset = "offset"
+	)
+	filter := input.StyleFilter{
+		Search: strings.TrimSpace(c.Query(Search)),
+		Limit:  20,
+		Offset: 0,
+	}
+	if limit := c.Query(Limit); limit != "" {
+		value, err := strconv.Atoi(limit)
+		if err != nil || value <= 0 || value > MaxPaginationLimit {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("limit must be between 1 and %d", MaxPaginationLimit),
+			})
+			return
+		}
+		filter.Limit = value
+	}
+
+	if offset := c.Query(Offset); offset != "" {
+		value, err := strconv.Atoi(offset)
+		if err != nil || value < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "offset must be a non-negative integer",
+			})
+			return
+		}
+		filter.Offset = value
+	}
 	styles, err := h.styles.List(
 		c.Request.Context(),
 		organizationID,
+		filter,
 	)
+
 	if err != nil {
 		writeError(c, err)
 		return

@@ -35,7 +35,7 @@ type UserRepository interface {
 type StyleRepository interface {
 	Create(context.Context, string, *entity.Style) error
 	GetByID(context.Context, string, string) (*entity.Style, error)
-	List(context.Context, string) ([]*entity.Style, error)
+	List(context.Context, string, input.StyleFilter) ([]*entity.Style, error)
 	Update(context.Context, string, *entity.Style) error
 	Delete(context.Context, string, string) error
 }

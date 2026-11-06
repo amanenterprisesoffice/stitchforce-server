@@ -2,6 +2,13 @@ package input
 
 import "time"
 
+type StyleFilter struct {
+    Search string
+
+    Limit  int
+    Offset int
+}
+
 type BundleFilter struct {
     Search string
     StyleID string
