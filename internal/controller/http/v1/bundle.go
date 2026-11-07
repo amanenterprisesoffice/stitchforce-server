@@ -143,9 +143,9 @@ func (h *BundleHandler) List(c *gin.Context) {
 
 	if limit := c.Query(Limit); limit != "" {
 		value, err := strconv.Atoi(limit)
-		if err != nil || value <= 0 || value > MaxPaginationLimit {
+		if err != nil || value <= 0 {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": fmt.Sprintf("limit must be between 1 and %d", MaxPaginationLimit),
+				"error": "limit must be a positive integer",
 			})
 			return
 		}
@@ -167,7 +167,7 @@ func (h *BundleHandler) List(c *gin.Context) {
 		date, err := time.Parse(DateLayout, createdFrom)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "created_from must be in YYYY-MM-DD format",
+				"error": fmt.Sprintf("created_from must be in %s format", DateLayout),
 			})
 			return
 		}
@@ -178,7 +178,7 @@ func (h *BundleHandler) List(c *gin.Context) {
 		date, err := time.Parse(DateLayout, createdTo)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "created_to must be in YYYY-MM-DD format",
+				"error": fmt.Sprintf("created_to must be in %s format", DateLayout),
 			})
 			return
 		}

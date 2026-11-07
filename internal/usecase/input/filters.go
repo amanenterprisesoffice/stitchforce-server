@@ -1,6 +1,9 @@
 package input
 
-import "time"
+import (
+	"stitchforce-server/internal/entity"
+	"time"
+)
 
 type StyleFilter struct {
     Search string
@@ -54,7 +57,7 @@ type StyleOperationFilter struct {
 
 type WorkerPaymentFilter struct {
     WorkerID  string
-    Status    string
+    Status    entity.PaymentStatus
     FromDate  *time.Time
     ToDate    *time.Time
     Limit     int
@@ -64,4 +67,14 @@ type WorkerPaymentFilter struct {
 type PayableEntriesFilter struct {
     FromDate time.Time
     ToDate   time.Time
+     Limit     int
+    Offset    int
+}
+
+type WorkerPaymentSummaryFilter struct {
+    WorkerID string
+    Status   entity.PaymentStatus
+
+    FromDate *time.Time
+    ToDate   *time.Time
 }

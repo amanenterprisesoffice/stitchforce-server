@@ -58,7 +58,7 @@ func (h *WorkerPaymentHandler) Create(c *gin.Context) {
 	fromDate, err := time.Parse(DateLayout, req.FromDate)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "incorrect from_date format",
+			"error": fmt.Sprintf("incorrect from_date format; expected %s", DateLayout),
 		})
 		return
 	}
@@ -66,7 +66,7 @@ func (h *WorkerPaymentHandler) Create(c *gin.Context) {
 	toDate, err := time.Parse(DateLayout, req.ToDate)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "incorrect to_date format",
+			"error": fmt.Sprintf("incorrect to_date format; expected %s", DateLayout),
 		})
 		return
 	}
@@ -74,7 +74,7 @@ func (h *WorkerPaymentHandler) Create(c *gin.Context) {
 	paymentDate, err := time.Parse(DateLayout, req.PaymentDate)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "incorrect payment_date format",
+			"error": fmt.Sprintf("incorrect payment_date format; expected %s", DateLayout),
 		})
 		return
 	}
@@ -151,25 +151,19 @@ func (h *WorkerPaymentHandler) List(c *gin.Context) {
 
 	filter := input.WorkerPaymentFilter{
 		WorkerID: strings.TrimSpace(c.Query(WorkerID)),
-		Status:   strings.TrimSpace(c.Query(Status)),
 		Limit:    20,
 		Offset:   0,
 	}
 
-	if filter.Status != "" &&
-		filter.Status != string(entity.PaymentStatusCompleted) &&
-		filter.Status != string(entity.PaymentStatusVoided) {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "status must be completed or voided",
-		})
-		return
+	if value := c.Query(Status); value != "" {
+		filter.Status = entity.PaymentStatus(value)
 	}
 
 	if value := c.Query(FromDate); value != "" {
 		date, err := time.Parse(DateLayout, value)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "incorrect from_date format",
+				"error": fmt.Sprintf("incorrect from_date format; expected %s", DateLayout),
 			})
 			return
 		}
@@ -180,7 +174,7 @@ func (h *WorkerPaymentHandler) List(c *gin.Context) {
 		date, err := time.Parse(DateLayout, value)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "incorrect to_date format",
+				"error": fmt.Sprintf("incorrect to_date format; expected %s", DateLayout),
 			})
 			return
 		}
@@ -198,12 +192,9 @@ func (h *WorkerPaymentHandler) List(c *gin.Context) {
 
 	if limit := c.Query(Limit); limit != "" {
 		value, err := strconv.Atoi(limit)
-		if err != nil || value <= 0 || value > MaxPaginationLimit {
+		if err != nil || value <= 0 {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": fmt.Sprintf(
-					"limit must be between 1 and %d",
-					MaxPaginationLimit,
-				),
+				"error": "limit must be a positive integer",
 			})
 			return
 		}
@@ -236,7 +227,7 @@ func (h *WorkerPaymentHandler) List(c *gin.Context) {
 
 // GET WORKER PAYMENT SUMMARY
 
-func (h *WorkerPaymentHandler) GetSummary(c *gin.Context) {
+func (h *WorkerPaymentHandler) GetWorkerSummary(c *gin.Context) {
 	organizationID := c.Param("organizationID")
 	workerID := c.Param("id")
 
@@ -247,10 +238,101 @@ func (h *WorkerPaymentHandler) GetSummary(c *gin.Context) {
 		return
 	}
 
+	const (
+		FromDate = "from_date"
+		ToDate   = "to_date"
+		Status   = "status"
+	)
+	filter := input.WorkerPaymentSummaryFilter{
+		WorkerID: workerID,
+	}
+
+	if value := c.Query(FromDate); value != "" {
+		date, err := time.Parse(DateLayout, value)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("incorrect from_date format; expected %s", DateLayout),
+			})
+			return
+		}
+		filter.FromDate = &date
+	}
+
+	if value := c.Query(ToDate); value != "" {
+		date, err := time.Parse(DateLayout, value)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("incorrect to_date format; expected %s", DateLayout),
+			})
+			return
+		}
+		filter.ToDate = &date
+	}
+
+	if value := c.Query(Status); value != "" {
+		filter.Status = entity.PaymentStatus(value)
+	}
+
 	summary, err := h.payments.GetSummary(
 		c.Request.Context(),
 		organizationID,
-		workerID,
+		filter,
+	)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, summary)
+}
+
+func (h *WorkerPaymentHandler) GetSummary(c *gin.Context) {
+	organizationID := c.Param("organizationID")
+
+	if organizationID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "organization id is required",
+		})
+		return
+	}
+
+	const (
+		FromDate = "from_date"
+		ToDate   = "to_date"
+		Status   = "status"
+	)
+	filter := input.WorkerPaymentSummaryFilter{}
+
+	if value := c.Query(FromDate); value != "" {
+		date, err := time.Parse(DateLayout, value)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("incorrect from_date format; expected %s", DateLayout),
+			})
+			return
+		}
+		filter.FromDate = &date
+	}
+
+	if value := c.Query(ToDate); value != "" {
+		date, err := time.Parse(DateLayout, value)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("incorrect to_date format; expected %s", DateLayout),
+			})
+			return
+		}
+		filter.ToDate = &date
+	}
+
+	if value := c.Query(Status); value != "" {
+		filter.Status = entity.PaymentStatus(value)
+	}
+
+	summary, err := h.payments.GetSummary(
+		c.Request.Context(),
+		organizationID,
+		filter,
 	)
 	if err != nil {
 		writeError(c, err)
@@ -286,7 +368,7 @@ func (h *WorkerPaymentHandler) GetPayableEntries(c *gin.Context) {
 	fromDate, err := time.Parse(DateLayout, fromDateValue)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "from_date must be in YYYY-MM-DD format",
+			"error": fmt.Sprintf("from_date must be in %s format", DateLayout),
 		})
 		return
 	}
@@ -294,7 +376,7 @@ func (h *WorkerPaymentHandler) GetPayableEntries(c *gin.Context) {
 	toDate, err := time.Parse(DateLayout, toDateValue)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "to_date must be in YYYY-MM-DD format",
+			"error": fmt.Sprintf("to_date must be in %s format", DateLayout),
 		})
 		return
 	}

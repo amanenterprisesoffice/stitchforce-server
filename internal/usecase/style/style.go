@@ -14,6 +14,10 @@ import (
 	"stitchforce-server/pkg/utils"
 )
 
+const (
+	MaxPaginationLimit = 600
+)
+
 type UseCase struct {
 	repository repo.StyleRepository
 	logger     *logger.Logger
@@ -28,9 +32,6 @@ func New(
 		logger:     logger,
 	}
 }
-
-
-
 
 func (u *UseCase) Create(
 	ctx context.Context,
@@ -95,6 +96,17 @@ func (u *UseCase) List(
 		return nil, err
 	}
 
+	if filter.Limit <= 0 {
+		filter.Limit = 20
+	}
+
+	if filter.Limit > MaxPaginationLimit {
+		filter.Limit = MaxPaginationLimit
+	}
+
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
 	return u.repository.List(ctx, organizationID, filter)
 }
 

@@ -129,18 +129,7 @@ func (r *Repository) List(
 	query += " ORDER BY created_at ASC"
 
 	limit := filter.Limit
-	if limit <= 0 {
-		limit = 20
-	}
-	if limit > 100 {
-		limit = 100
-	}
-
 	offset := filter.Offset
-	if offset < 0 {
-		offset = 0
-	}
-
 	query += fmt.Sprintf(
 		" LIMIT $%d OFFSET $%d",
 		argPosition,

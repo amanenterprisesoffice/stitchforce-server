@@ -20,6 +20,7 @@ import (
 
 const (
 	maxPhotoSize = 5 * 1024 * 1024
+	MaxPaginationLimit = 600
 )
 
 type UseCase struct {
@@ -186,6 +187,18 @@ func (u *UseCase) List(
 	organizationID, err := ucutils.ValidateOrganizationID(organizationID)
 	if err != nil {
 		return nil, err
+	}
+
+	if filter.Limit <= 0 {
+		filter.Limit = 20
+	}
+
+	if filter.Limit > MaxPaginationLimit {
+		filter.Limit = MaxPaginationLimit
+	}
+
+	if filter.Offset < 0 {
+		filter.Offset = 0
 	}
 
 	workers, err := u.repository.List(ctx, organizationID, filter)

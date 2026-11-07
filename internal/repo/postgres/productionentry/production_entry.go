@@ -22,207 +22,198 @@ func New(db *sql.DB) repo.ProductionEntryRepository {
 // =========================================
 // CREATE WITH BUNDLE QUANTITY LIMIT
 // =========================================
-
-func (r *Repository) CreateWithBundleLimit(
-    ctx context.Context,
-    organizationID string,
-    entry *entity.ProductionEntry,
+func (r *Repository) Create(
+	ctx context.Context,
+	organizationID string,
+	entry *entity.ProductionEntry,
 ) error {
 
-    tx, err := r.db.BeginTx(ctx, nil)
-    if err != nil {
-        return err
-    }
-    defer tx.Rollback()
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 
-    // 1. LOCK AND FETCH BUNDLE.
+	// 1. LOCK AND FETCH BUNDLE.
 
-    var (
-        bundleQuantity int
-        bundleStyleID  string
-        bundleStatus   string
-    )
+	var (
+		bundleQuantity int
+		bundleStyleID  string
+		bundleStatus   string
+	)
 
-    err = tx.QueryRowContext(
-        ctx,
-        `
-        SELECT
-            quantity,
-            style_id,
-            status
-        FROM bundles
-        WHERE id = $1
-          AND organization_id = $2
-          AND deleted_at IS NULL
-        FOR UPDATE
-        `,
-        entry.BundleID,
-        organizationID,
-    ).Scan(
-        &bundleQuantity,
-        &bundleStyleID,
-        &bundleStatus,
-    )
+	err = tx.QueryRowContext(
+		ctx,
+		`
+		SELECT quantity, style_id, status
+		FROM bundles
+		WHERE id = $1
+		  AND organization_id = $2
+		  AND deleted_at IS NULL
+		FOR UPDATE
+		`,
+		entry.BundleID,
+		organizationID,
+	).Scan(
+		&bundleQuantity,
+		&bundleStyleID,
+		&bundleStatus,
+	)
 
-    if errors.Is(err, sql.ErrNoRows) {
-        return repo.ErrNotFound
-    }
+	if errors.Is(err, sql.ErrNoRows) {
+		return repo.ErrNotFound
+	}
 
-    if err != nil {
-        return err
-    }
+	if err != nil {
+		return err
+	}
 
-    if bundleStatus != "ready" && bundleStatus != "in_progress" {
-        return errors.New("bundle is not available for production")
-    }
+	if bundleStatus != string(entity.BundleStatusReady) &&
+		bundleStatus != string(entity.BundleStatusInProgress) {
+		return errors.New("bundle is not available for production")
+	}
 
-    if bundleQuantity <= 0 {
-        return errors.New("bundle quantity must be greater than zero")
-    }
+	if bundleQuantity <= 0 {
+		return errors.New("bundle quantity must be greater than zero")
+	}
 
-    // Always enforce the actual bundle quantity.
-    entry.Quantity = bundleQuantity
+	// Always use the actual bundle quantity.
+	entry.Quantity = bundleQuantity
 
-    // 2. VERIFY WORKER.
+	// 2. VERIFY WORKER.
 
-    var workerID string
+	err = tx.QueryRowContext(
+		ctx,
+		`
+		SELECT id
+		FROM garment_workers
+		WHERE id = $1
+		  AND organization_id = $2
+		  AND status = $3
+		  AND deleted_at IS NULL
+		FOR SHARE
+		`,
+		entry.WorkerID,
+		organizationID,
+		entity.WorkerStatusActive,
+	).Scan(new(string))
 
-    err = tx.QueryRowContext(
-        ctx,
-        `
-        SELECT id
-        FROM garment_workers
-        WHERE id = $1
-          AND organization_id = $2
-          AND status = 'active'
-          AND deleted_at IS NULL
-        FOR SHARE
-        `,
-        entry.WorkerID,
-        organizationID,
-    ).Scan(&workerID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return errors.New("garment worker not found or inactive")
+	}
 
-    if errors.Is(err, sql.ErrNoRows) {
-        return errors.New("garment worker not found or inactive")
-    }
+	if err != nil {
+		return err
+	}
 
-    if err != nil {
-        return err
-    }
+	// 3. VERIFY STYLE OPERATION AND FETCH CURRENT RATE.
 
-    // 3. VERIFY STYLE OPERATION.
+	var operationRate int64
 
-    var operationRate int64
+	err = tx.QueryRowContext(
+		ctx,
+		`
+		SELECT rate_per_piece
+		FROM style_operations
+		WHERE id = $1
+		  AND style_id = $2
+		  AND organization_id = $3
+		FOR SHARE
+		`,
+		entry.StyleOperationID,
+		bundleStyleID,
+		organizationID,
+	).Scan(&operationRate)
 
-    err = tx.QueryRowContext(
-        ctx,
-        `
-        SELECT rate_per_piece
-        FROM style_operations
-        WHERE id = $1
-          AND style_id = $2
-          AND organization_id = $3
-        FOR SHARE
-        `,
-        entry.StyleOperationID,
-        bundleStyleID,
-        organizationID,
-    ).Scan(&operationRate)
+	if errors.Is(err, sql.ErrNoRows) {
+		return errors.New(
+			"style operation does not exist for this bundle's style",
+		)
+	}
 
-    if errors.Is(err, sql.ErrNoRows) {
-        return errors.New("style operation does not exist for this bundle's style")
-    }
+	if err != nil {
+		return err
+	}
 
-    if err != nil {
-        return err
-    }
+	// Always use the authoritative database rate.
+	entry.RatePerPiece = operationRate
 
-    // Ensure rate has not changed since the usecase fetched it.
-    if operationRate != entry.RatePerPiece {
-        return errors.New("style operation rate changed; please retry")
-    }
+	// 4. CHECK DUPLICATE PRODUCTION ENTRY.
 
-    // 4. CHECK DUPLICATE OPERATION ENTRY.
+	var exists bool
 
-    var exists bool
+	err = tx.QueryRowContext(
+		ctx,
+		`
+		SELECT EXISTS (
+			SELECT 1
+			FROM production_entries
+			WHERE organization_id = $1
+			  AND bundle_id = $2
+			  AND style_operation_id = $3
+			  AND deleted_at IS NULL
+		)
+		`,
+		organizationID,
+		entry.BundleID,
+		entry.StyleOperationID,
+	).Scan(&exists)
 
-    err = tx.QueryRowContext(
-        ctx,
-        `
-        SELECT EXISTS (
-            SELECT 1
-            FROM production_entries
-            WHERE organization_id = $1
-              AND bundle_id = $2
-              AND style_operation_id = $3
-              AND deleted_at IS NULL
-        )
-        `,
-        organizationID,
-        entry.BundleID,
-        entry.StyleOperationID,
-    ).Scan(&exists)
+	if err != nil {
+		return err
+	}
 
-    if err != nil {
-        return err
-    }
+	if exists {
+		return errors.New(
+			"production entry already exists for this bundle operation",
+		)
+	}
 
-    if exists {
-        return errors.New(
-            "production entry already exists for this bundle operation",
-        )
-    }
+	// 5. INSERT PRODUCTION ENTRY.
 
-    // 5. INSERT PRODUCTION ENTRY.
+	err = tx.QueryRowContext(
+		ctx,
+		`
+		INSERT INTO production_entries (
+			id,
+			organization_id,
+			bundle_id,
+			worker_id,
+			style_operation_id,
+			quantity,
+			rate_per_piece,
+			production_date,
+			remarks
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		RETURNING created_at, updated_at, deleted_at
+		`,
+		entry.ID,
+		organizationID,
+		entry.BundleID,
+		entry.WorkerID,
+		entry.StyleOperationID,
+		entry.Quantity,
+		entry.RatePerPiece,
+		entry.ProductionDate,
+		entry.Remarks,
+	).Scan(
+		&entry.CreatedAt,
+		&entry.UpdatedAt,
+		&entry.DeletedAt,
+	)
 
-    query := `
-        INSERT INTO production_entries (
-            id,
-            organization_id,
-            bundle_id,
-            worker_id,
-            style_operation_id,
-            quantity,
-            rate_per_piece,
-            production_date,
-            remarks
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        RETURNING
-            created_at,
-            updated_at,
-            deleted_at
-    `
+	if err != nil {
+		return err
+	}
 
-    err = tx.QueryRowContext(
-        ctx,
-        query,
-        entry.ID,
-        organizationID,
-        entry.BundleID,
-        entry.WorkerID,
-        entry.StyleOperationID,
-        entry.Quantity,
-        entry.RatePerPiece,
-        entry.ProductionDate,
-        entry.Remarks,
-    ).Scan(
-        &entry.CreatedAt,
-        &entry.UpdatedAt,
-        &entry.DeletedAt,
-    )
+	// 6. COMMIT.
 
-    if err != nil {
-        return err
-    }
+	if err := tx.Commit(); err != nil {
+		return err
+	}
 
-    // 6. COMMIT.
-
-    if err := tx.Commit(); err != nil {
-        return err
-    }
-
-    return nil
+	return nil
 }
 
 // =========================================
@@ -389,18 +380,7 @@ func (r *Repository) List(
 	query += " ORDER BY pe.production_date DESC, pe.created_at DESC"
 
 	limit := filter.Limit
-	if limit <= 0 {
-		limit = 20
-	}
-	if limit > 100 {
-		limit = 100
-	}
-
 	offset := filter.Offset
-	if offset < 0 {
-		offset = 0
-	}
-
 	query += fmt.Sprintf(
 		" LIMIT $%d OFFSET $%d",
 		argPosition,

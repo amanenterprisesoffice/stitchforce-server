@@ -18,6 +18,10 @@ import (
 	appUtils "stitchforce-server/pkg/utils"
 )
 
+const (
+	MaxPaginationLimit = 600
+)
+
 type UseCase struct {
 	repository               repo.ProductionEntryRepository
 	bundleRepository         repo.BundleRepository
@@ -62,6 +66,10 @@ func (u *UseCase) Create(
 
 	if entry == nil {
 		return errors.New("production entry is required")
+	}
+
+	if entry.ProductionDate.After(time.Now().UTC()) {
+		return errors.New("production date cannot be in the future")
 	}
 
 	entry.BundleID = strings.TrimSpace(entry.BundleID)
@@ -177,7 +185,7 @@ func (u *UseCase) Create(
 	// - Ensures one entry per bundle operation.
 	// - Inserts the full bundle quantity.
 
-	if err := u.repository.CreateWithBundleLimit(
+	if err := u.repository.Create(
 		ctx,
 		organizationID,
 		entry,
@@ -252,6 +260,18 @@ func (u *UseCase) List(
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	if filter.Limit <= 0 {
+		filter.Limit = 20
+	}
+
+	if filter.Limit > MaxPaginationLimit {
+		filter.Limit = MaxPaginationLimit
+	}
+
+	if filter.Offset < 0 {
+		filter.Offset = 0
 	}
 
 	results := make([]*output.ProductionEntry, 0, len(entries))

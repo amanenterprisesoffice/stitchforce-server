@@ -239,7 +239,7 @@ type WorkerPaymentUseCase interface {
         context.Context,
         string, // organizationID
         string, // paymentID
-    ) (*entity.WorkerPayment, error)
+    ) (*output.WorkerPayment, error)
 
     List(
         context.Context,
@@ -250,7 +250,7 @@ type WorkerPaymentUseCase interface {
     GetSummary(
         context.Context,
         string, // organizationID
-        string, // workerID
+        input.WorkerPaymentSummaryFilter,
     ) (*output.WorkerPaymentSummary, error)
 
     GetPayableEntries(

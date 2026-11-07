@@ -159,7 +159,7 @@ type GarmentWorkerRepository interface {
 }
 
 type ProductionEntryRepository interface {
-	CreateWithBundleLimit(
+	Create(
 		context.Context,
 		string, // organizationID
 		*entity.ProductionEntry,
@@ -202,7 +202,7 @@ type WorkerPaymentRepository interface {
 		context.Context,
 		string, // organizationID
 		string, // paymentID
-	) (*entity.WorkerPayment, error)
+	) (*output.WorkerPayment, error)
 
 	List(
 		context.Context,
@@ -213,7 +213,7 @@ type WorkerPaymentRepository interface {
 	GetSummary(
 		context.Context,
 		string, // organizationID
-		string, // workerID
+		input.WorkerPaymentSummaryFilter, // workerID
 	) (*output.WorkerPaymentSummary, error)
 
 	ListPayableEntries(

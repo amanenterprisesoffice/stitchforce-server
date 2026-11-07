@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,9 +14,8 @@ import (
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/usecase"
 	"stitchforce-server/internal/usecase/input"
+	"stitchforce-server/internal/usecase/output"
 )
-
-const DateLayout = "2006-01-02"
 
 type ProductionEntryHandler struct {
 	productionEntries usecase.ProductionEntryUseCase
@@ -169,7 +169,7 @@ func (h *ProductionEntryHandler) List(c *gin.Context) {
 		date, err := time.Parse(DateLayout, value)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "invalid from_date; expected YYYY-MM-DD",
+				"error": fmt.Sprintf("invalid from_date; expected %s", DateLayout),
 			})
 			return
 		}
@@ -182,7 +182,7 @@ func (h *ProductionEntryHandler) List(c *gin.Context) {
 		date, err := time.Parse(DateLayout, value)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "invalid to_date; expected YYYY-MM-DD",
+				"error": fmt.Sprintf("invalid to_date; expected %s", DateLayout),
 			})
 			return
 		}
@@ -276,4 +276,111 @@ func (h *ProductionEntryHandler) Delete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "production entry deleted successfully",
 	})
+}
+
+
+func (h *ProductionEntryHandler) Export(c *gin.Context) {
+	organizationID := c.Param("organizationID")
+
+	if organizationID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "organization id is required",
+		})
+		return
+	}
+
+	format := strings.ToLower(strings.TrimSpace(c.DefaultQuery("format", "xlsx")))
+
+	if format != "pdf" && format != "xlsx" && format != "csv" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid format; supported formats are pdf, xlsx, csv",
+		})
+		return
+	}
+
+	filter := input.ProductionEntryFilter{
+		Search:           strings.TrimSpace(c.Query("search")),
+		BundleID:         c.Query("bundle_id"),
+		WorkerID:         c.Query("worker_id"),
+		StyleID:          c.Query("style_id"),
+		StyleOperationID: c.Query("style_operation_id"),
+	}
+
+	// Parse from_date.
+	if value := c.Query("from_date"); value != "" {
+		date, err := time.Parse(DateLayout, value)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("invalid from_date; expected %s", DateLayout),
+			})
+			return
+		}
+
+		filter.FromDate = &date
+	}
+
+	// Parse inclusive to_date.
+	if value := c.Query("to_date"); value != "" {
+		date, err := time.Parse(DateLayout, value)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("invalid to_date; expected %s", DateLayout),
+			})
+			return
+		}
+
+		date = date.AddDate(0, 0, 1)
+		filter.ToDate = &date
+	}
+
+	// Fetch all matching entries in batches.
+	const batchSize = 100
+
+	entries := make([]*output.ProductionEntry, 0)
+	offset := 0
+
+	for {
+		filter.Limit = batchSize
+		filter.Offset = offset
+
+		batch, err := h.productionEntries.List(
+			c.Request.Context(),
+			organizationID,
+			filter,
+		)
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+
+		entries = append(entries, batch...)
+
+		if len(batch) < batchSize {
+			break
+		}
+
+		offset += batchSize
+	}
+
+	filename := fmt.Sprintf(
+		"production-entries-%s",
+		time.Now().Format("20060102-150405"),
+	)
+
+	switch format {
+	case "csv":
+		if err := exportProductionEntriesCSV(c, entries, filename); err != nil {
+			writeError(c, err)
+		}
+
+	case "xlsx":
+		if err := exportProductionEntriesExcel(c, entries, filename); err != nil {
+			writeError(c, err)
+		}
+
+	case "pdf":
+		if err := exportProductionEntriesPDF(c, entries, filename); err != nil {
+			writeError(c, err)
+		}
+	}
 }

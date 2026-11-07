@@ -117,13 +117,14 @@ func NewRouter(
 					workers.PUT("/:id", garmentWorkerHandler.Update)
 					workers.PATCH("/:id/status", garmentWorkerHandler.SetStatus)
 					workers.DELETE("/:id", garmentWorkerHandler.Delete)
-					workers.GET("/:id/payment-summary", workerPaymentHandler.GetSummary)
+					workers.GET("/:id/payment-summary", workerPaymentHandler.GetWorkerSummary)
 					workers.GET("/:id/payable-entries", workerPaymentHandler.GetPayableEntries)
 				}
 
 				workerPayments := organizations.Group("/worker-payments")
 				{
 					workerPayments.POST("", workerPaymentHandler.Create)
+					workerPayments.GET("/summary", workerPaymentHandler.GetSummary)
 					workerPayments.GET("", workerPaymentHandler.List)
 					workerPayments.GET("/:id", workerPaymentHandler.Get)
 					workerPayments.PATCH("/:id/void", workerPaymentHandler.Void)
@@ -131,6 +132,7 @@ func NewRouter(
 
 				productionEntries := organizations.Group("/production-entries")
 				{
+					productionEntries.GET("/export", productionEntryHandler.Export)
 					productionEntries.POST("", productionEntryHandler.Create)
 					productionEntries.GET("", productionEntryHandler.List)
 					productionEntries.GET("/:id", productionEntryHandler.Get)

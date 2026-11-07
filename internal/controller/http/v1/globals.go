@@ -1,5 +1,5 @@
 package v1
 
 const (
-	MaxPaginationLimit = 600
+	DateLayout         = "2006-01-02"
 )
