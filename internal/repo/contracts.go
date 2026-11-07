@@ -6,6 +6,7 @@ import (
 
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/usecase/input"
+	"stitchforce-server/internal/usecase/output"
 )
 
 var ErrNotFound = errors.New("not found")
@@ -125,7 +126,6 @@ type BundleRepository interface {
 	) error
 }
 
-
 type GarmentWorkerRepository interface {
 	Create(
 		context.Context,
@@ -158,35 +158,74 @@ type GarmentWorkerRepository interface {
 	) error
 }
 
-
 type ProductionEntryRepository interface {
-    CreateWithBundleLimit(
-        context.Context,
-        string, // organizationID
-        *entity.ProductionEntry,
-    ) error
+	CreateWithBundleLimit(
+		context.Context,
+		string, // organizationID
+		*entity.ProductionEntry,
+	) error
 
-    GetByID(
-        context.Context,
-        string, // organizationID
-        string, // productionEntryID
-    ) (*entity.ProductionEntry, error)
+	GetByID(
+		context.Context,
+		string, // organizationID
+		string, // productionEntryID
+	) (*entity.ProductionEntry, error)
 
-    List(
-        context.Context,
-        string, // organizationID
+	List(
+		context.Context,
+		string, // organizationID
 		input.ProductionEntryFilter,
-    ) ([]*entity.ProductionEntry, error)
+	) ([]*entity.ProductionEntry, error)
 
-    UpdateWithBundleLimit(
-        context.Context,
-        string, // organizationID
-        *entity.ProductionEntry,
-    ) error
+	UpdateWithBundleLimit(
+		context.Context,
+		string, // organizationID
+		*entity.ProductionEntry,
+	) error
 
-    Delete(
-        context.Context,
-        string, // organizationID
-        string, // productionEntryID
-    ) error
+	Delete(
+		context.Context,
+		string, // organizationID
+		string, // productionEntryID
+	) error
+}
+
+type WorkerPaymentRepository interface {
+	CreateWithAllocations(
+		context.Context,
+		string, // organizationID
+		*entity.WorkerPayment,
+		input.PayableEntriesFilter,
+	) error
+
+	GetByID(
+		context.Context,
+		string, // organizationID
+		string, // paymentID
+	) (*entity.WorkerPayment, error)
+
+	List(
+		context.Context,
+		string, // organizationID
+		input.WorkerPaymentFilter,
+	) ([]*entity.WorkerPayment, error)
+
+	GetSummary(
+		context.Context,
+		string, // organizationID
+		string, // workerID
+	) (*output.WorkerPaymentSummary, error)
+
+	ListPayableEntries(
+		context.Context,
+		string, // organizationID
+		string, // workerID
+		input.PayableEntriesFilter,
+	) ([]*output.PayableProductionEntry, error)
+
+	Void(
+		context.Context,
+		string, // organizationID
+		string, // paymentID
+	) error
 }

@@ -2,14 +2,15 @@ package app
 
 import (
 	"stitchforce-server/internal/repo"
-	bundlerepo "stitchforce-server/internal/repo/persistent/bundle"
-	productionentryrepo "stitchforce-server/internal/repo/persistent/productionentry"
-	garmentworkerrepo "stitchforce-server/internal/repo/persistent/garmentworker"
-	organizationrepo "stitchforce-server/internal/repo/persistent/organization"
-	sizerepo "stitchforce-server/internal/repo/persistent/size"
-	stylerepo "stitchforce-server/internal/repo/persistent/style"
-	styleopsrepo "stitchforce-server/internal/repo/persistent/styleoperation"
-	userrepo "stitchforce-server/internal/repo/persistent/user"
+	bundlerepo "stitchforce-server/internal/repo/postgres/bundle"
+	productionentryrepo "stitchforce-server/internal/repo/postgres/productionentry"
+	garmentworkerrepo "stitchforce-server/internal/repo/postgres/garmentworker"
+	organizationrepo "stitchforce-server/internal/repo/postgres/organization"
+	sizerepo "stitchforce-server/internal/repo/postgres/size"
+	stylerepo "stitchforce-server/internal/repo/postgres/style"
+	styleopsrepo "stitchforce-server/internal/repo/postgres/styleoperation"
+	userrepo "stitchforce-server/internal/repo/postgres/user"
+	workerpaymentrepo "stitchforce-server/internal/repo/postgres/workerpayment"
 	"stitchforce-server/pkg/postgres"
 )
 
@@ -22,6 +23,7 @@ type Repositories struct {
 	Sizes           repo.SizeRepository
 	Bundles          repo.BundleRepository
 	ProductionEntry  repo.ProductionEntryRepository
+	WorkerPayments   repo.WorkerPaymentRepository
 }
 
 func NewRepositories(database *postgres.Client) Repositories {
@@ -34,5 +36,6 @@ func NewRepositories(database *postgres.Client) Repositories {
 		Sizes:           sizerepo.New(database.DB),
 		Bundles:          bundlerepo.New(database.DB),
 		ProductionEntry:  productionentryrepo.New(database.DB),
+		WorkerPayments:  workerpaymentrepo.New(database.DB),
 	}
 }

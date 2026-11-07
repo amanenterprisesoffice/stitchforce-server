@@ -50,3 +50,18 @@ type StyleOperationFilter struct {
 	Limit  int
 	Offset int
 }
+
+
+type WorkerPaymentFilter struct {
+    WorkerID  string
+    Status    string
+    FromDate  *time.Time
+    ToDate    *time.Time
+    Limit     int
+    Offset    int
+}
+
+type PayableEntriesFilter struct {
+    FromDate time.Time
+    ToDate   time.Time
+}

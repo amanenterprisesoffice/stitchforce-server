@@ -11,6 +11,7 @@ import (
 	styleuc "stitchforce-server/internal/usecase/style"
 	styleopsuc "stitchforce-server/internal/usecase/styleoperation"
 	useruc "stitchforce-server/internal/usecase/user"
+	workerpaymentuc "stitchforce-server/internal/usecase/workerpayment"
 	"stitchforce-server/pkg/logger"
 )
 
@@ -23,6 +24,7 @@ type UseCases struct {
 	Size            usecase.SizeUseCase
 	Bundle          usecase.BundleUseCase
 	ProductionEntry usecase.ProductionEntryUseCase
+	WorkerPayment usecase.WorkerPaymentUseCase
 }
 
 func NewUseCases(
@@ -46,5 +48,6 @@ func NewUseCases(
 		Size:            sizeuc.New(repositories.Sizes, log),
 		Bundle:          bundleuc.New(repositories.Bundles, log),
 		ProductionEntry: productionentryuc.New(repositories.ProductionEntry, repositories.Bundles, repositories.GarmentWorkers, repositories.StyleOperations, repositories.Style, storage, log),
+		WorkerPayment:   workerpaymentuc.New(repositories.WorkerPayments, repositories.GarmentWorkers, log),
 	}
 }

@@ -19,6 +19,7 @@ func NewRouter(
 	sizeUseCase usecase.SizeUseCase,
 	bundleUseCase usecase.BundleUseCase,
 	productionEntryUseCase usecase.ProductionEntryUseCase,
+	workerPaymentUseCase usecase.WorkerPaymentUseCase,
 	log *logger.Logger,
 	jwtManager *jwt.Manager,
 	validate *validator.Validate,
@@ -47,6 +48,7 @@ func NewRouter(
 	bundleHandler := NewBundleHandler(bundleUseCase, validate)
 	garmentWorkerHandler := NewGarmentWorkerHandler(garmentWorkers, validate)
 	productionEntryHandler := NewProductionEntryHandler(productionEntryUseCase, validate)
+	workerPaymentHandler := NewWorkerPaymentHandler(workerPaymentUseCase, validate)
 
 	v1 := r.Group("/v1")
 	{
@@ -54,6 +56,7 @@ func NewRouter(
 		{
 			auth.POST("/register", userHandler.Register)
 			auth.POST("/login", userHandler.Login)
+			auth.POST("/logout", userHandler.Logout)
 		}
 
 		protected := v1.Group("")
@@ -114,7 +117,18 @@ func NewRouter(
 					workers.PUT("/:id", garmentWorkerHandler.Update)
 					workers.PATCH("/:id/status", garmentWorkerHandler.SetStatus)
 					workers.DELETE("/:id", garmentWorkerHandler.Delete)
+					workers.GET("/:id/payment-summary", workerPaymentHandler.GetSummary)
+					workers.GET("/:id/payable-entries", workerPaymentHandler.GetPayableEntries)
 				}
+
+				workerPayments := organizations.Group("/worker-payments")
+				{
+					workerPayments.POST("", workerPaymentHandler.Create)
+					workerPayments.GET("", workerPaymentHandler.List)
+					workerPayments.GET("/:id", workerPaymentHandler.Get)
+					workerPayments.PATCH("/:id/void", workerPaymentHandler.Void)
+				}
+
 				productionEntries := organizations.Group("/production-entries")
 				{
 					productionEntries.POST("", productionEntryHandler.Create)

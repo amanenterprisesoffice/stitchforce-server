@@ -226,3 +226,43 @@ type ProductionEntryUseCase interface {
 		string,
 	) error
 }
+
+
+type WorkerPaymentUseCase interface {
+    Create(
+        context.Context,
+        string, // organizationID
+        *input.CreateWorkerPaymentInput,
+    ) error
+
+    GetByID(
+        context.Context,
+        string, // organizationID
+        string, // paymentID
+    ) (*entity.WorkerPayment, error)
+
+    List(
+        context.Context,
+        string, // organizationID
+        input.WorkerPaymentFilter,
+    ) ([]*entity.WorkerPayment, error)
+
+    GetSummary(
+        context.Context,
+        string, // organizationID
+        string, // workerID
+    ) (*output.WorkerPaymentSummary, error)
+
+    GetPayableEntries(
+        context.Context,
+        string, // organizationID
+        string, // workerID
+        input.PayableEntriesFilter,
+    ) ([]*output.PayableProductionEntry, error)
+
+    Void(
+        context.Context,
+        string, // organizationID
+        string, // paymentID
+    ) error
+}

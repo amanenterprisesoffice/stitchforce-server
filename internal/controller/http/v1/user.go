@@ -2,6 +2,7 @@ package v1
 
 import (
 	"net/http"
+	"os"
 
 	"stitchforce-server/internal/controller/http/middleware"
 	"stitchforce-server/internal/controller/http/v1/request"
@@ -90,15 +91,17 @@ func (h *UserHandler) Login(c *gin.Context) {
 		return
 	}
 
+	secure := os.Getenv("APP_ENV") == "production"
+
 	// Set JWT in HTTP-only cookie
 	c.SetCookie(
-		"access_token", // Cookie name
-		token,          // JWT token
-		3600,           // Max age: 1 hour
-		"/",            // Path
-		"",             // Domain (current domain)
-		true,           // Secure (HTTPS only)
-		true,           // HttpOnly
+		middleware.TokenKey, // Cookie name
+		token,               // JWT token
+		3600,                // Max age: 1 hour
+		"/",                 // Path
+		"",                  // Domain (current domain)
+		secure,              // Secure (HTTPS only)
+		true,                // HttpOnly
 	)
 
 	c.JSON(http.StatusOK, gin.H{
@@ -106,6 +109,24 @@ func (h *UserHandler) Login(c *gin.Context) {
 		"message": "Login successful",
 		"user":    u,
 		"token":   token,
+	})
+}
+
+func (h *UserHandler) Logout(c *gin.Context) {
+	secure := os.Getenv("APP_ENV") == "production"
+	c.SetCookie(
+		middleware.TokenKey,
+		"",
+		-1, // Expire immediately
+		"/",
+		"",
+		secure, // Secure
+		true,   // HttpOnly
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Logout successful",
 	})
 }
 

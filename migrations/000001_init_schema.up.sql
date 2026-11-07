@@ -57,7 +57,7 @@ CREATE TABLE garment_workers (
     name VARCHAR(150) NOT NULL,
     phone VARCHAR(20),
     gender VARCHAR(20),
-    photo_key TEXT,
+    photo_key TEXT NOT NULL DEFAULT '',
 
     status VARCHAR(20) NOT NULL DEFAULT 'active'
         CHECK (status IN ('active', 'inactive')),
@@ -66,7 +66,10 @@ CREATE TABLE garment_workers (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ DEFAULT NULL,
 
-    UNIQUE (id, organization_id)
+    UNIQUE (id, organization_id),
+
+    -- Required by worker_payments composite foreign key.
+    UNIQUE (organization_id, id)
 );
 
 CREATE INDEX idx_garment_workers_organization_id
@@ -114,6 +117,7 @@ CREATE TABLE style_operations (
 
     name VARCHAR(200) NOT NULL,
 
+    -- Stored in paise.
     rate_per_piece BIGINT NOT NULL DEFAULT 0
         CHECK (rate_per_piece >= 0),
 
@@ -197,19 +201,16 @@ CREATE TABLE bundles (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ DEFAULT NULL,
 
-    -- Organization ownership
     CONSTRAINT fk_bundles_organization
         FOREIGN KEY (organization_id)
         REFERENCES organizations(id)
         ON DELETE CASCADE,
 
-    -- Ensure style belongs to the same organization
     CONSTRAINT fk_bundles_style
         FOREIGN KEY (style_id, organization_id)
         REFERENCES styles(id, organization_id)
         ON DELETE RESTRICT,
 
-    -- Ensure size belongs to the same organization
     CONSTRAINT fk_bundles_size
         FOREIGN KEY (size_id, organization_id)
         REFERENCES sizes(id, organization_id)
@@ -230,21 +231,17 @@ CREATE UNIQUE INDEX uq_bundles_organization_number
     ON bundles(organization_id, bundle_number)
     WHERE deleted_at IS NULL;
 
-
 CREATE INDEX idx_bundles_organization_id
     ON bundles(organization_id)
     WHERE deleted_at IS NULL;
-
 
 CREATE INDEX idx_bundles_style_id
     ON bundles(organization_id, style_id)
     WHERE deleted_at IS NULL;
 
-
 CREATE INDEX idx_bundles_size_id
     ON bundles(organization_id, size_id)
     WHERE deleted_at IS NULL;
-
 
 CREATE INDEX idx_bundles_status
     ON bundles(organization_id, status)
@@ -262,7 +259,6 @@ CREATE TABLE production_entries (
 
     bundle_id TEXT NOT NULL,
     worker_id TEXT NOT NULL,
-
     style_operation_id TEXT NOT NULL,
 
     quantity INTEGER NOT NULL
@@ -270,10 +266,11 @@ CREATE TABLE production_entries (
 
     -- Snapshot of operation rate at the time
     -- this production entry was recorded.
+    -- Stored in paise.
     rate_per_piece BIGINT NOT NULL
         CHECK (rate_per_piece >= 0),
 
-    -- Calculated as quantity * rate_per_piece.
+    -- Calculated automatically in paise.
     total_amount BIGINT GENERATED ALWAYS AS (
         quantity::BIGINT * rate_per_piece
     ) STORED,
@@ -286,38 +283,168 @@ CREATE TABLE production_entries (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ DEFAULT NULL,
 
-    -- Organization ownership
     CONSTRAINT fk_production_entries_organization
         FOREIGN KEY (organization_id)
         REFERENCES organizations(id)
         ON DELETE CASCADE,
 
-    -- Ensure bundle belongs to the same organization
     CONSTRAINT fk_production_entries_bundle
         FOREIGN KEY (bundle_id, organization_id)
         REFERENCES bundles(id, organization_id)
         ON DELETE RESTRICT,
 
-    -- Ensure worker belongs to the same organization
     CONSTRAINT fk_production_entries_worker
         FOREIGN KEY (worker_id, organization_id)
         REFERENCES garment_workers(id, organization_id)
         ON DELETE RESTRICT,
 
-    -- Ensure operation belongs to the same organization
     CONSTRAINT fk_production_entries_operation
         FOREIGN KEY (style_operation_id, organization_id)
         REFERENCES style_operations(id, organization_id)
-        ON DELETE RESTRICT
+        ON DELETE RESTRICT,
+
+    -- Required by worker_payment_allocations composite foreign key.
+    UNIQUE (organization_id, id)
 );
 
+
+-- One active production entry per bundle operation.
+-- A deleted entry allows the operation to be recorded again.
+
 CREATE UNIQUE INDEX idx_production_entries_bundle_operation
-ON production_entries (
-    organization_id,
-    bundle_id,
-    style_operation_id
-)
-WHERE deleted_at IS NULL;
+    ON production_entries (
+        organization_id,
+        bundle_id,
+        style_operation_id
+    )
+    WHERE deleted_at IS NULL;
+
+
+CREATE INDEX idx_production_entries_organization_id
+    ON production_entries(organization_id);
+
+CREATE INDEX idx_production_entries_worker_date
+    ON production_entries(organization_id, worker_id, production_date)
+    WHERE deleted_at IS NULL;
+
+CREATE INDEX idx_production_entries_bundle_id
+    ON production_entries(organization_id, bundle_id)
+    WHERE deleted_at IS NULL;
+
+CREATE INDEX idx_production_entries_operation_id
+    ON production_entries(organization_id, style_operation_id)
+    WHERE deleted_at IS NULL;
+
+
+-- =========================================
+-- 10. WORKER PAYMENTS
+-- =========================================
+
+CREATE TABLE worker_payments (
+    id TEXT PRIMARY KEY,
+
+    organization_id TEXT NOT NULL
+        REFERENCES organizations(id)
+        ON DELETE CASCADE,
+
+    worker_id TEXT NOT NULL,
+
+    -- Total payment amount in paise.
+    amount BIGINT NOT NULL
+        CHECK (amount > 0),
+
+    payment_date TIMESTAMPTZ NOT NULL,
+
+    payment_method VARCHAR(20) NOT NULL
+        CHECK (
+            payment_method IN (
+                'cash',
+                'bank',
+                'upi',
+                'cheque'
+            )
+        ),
+
+    reference TEXT NOT NULL DEFAULT '',
+    remarks TEXT NOT NULL DEFAULT '',
+
+    status VARCHAR(20) NOT NULL DEFAULT 'completed'
+        CHECK (status IN ('completed', 'voided')),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT fk_worker_payments_worker
+        FOREIGN KEY (organization_id, worker_id)
+        REFERENCES garment_workers(organization_id, id)
+        ON DELETE RESTRICT,
+
+    -- Required by worker_payment_allocations composite foreign key.
+    UNIQUE (organization_id, id)
+);
+
+
+CREATE INDEX idx_worker_payments_worker_date
+    ON worker_payments(
+        organization_id,
+        worker_id,
+        payment_date
+    );
+
+CREATE INDEX idx_worker_payments_status
+    ON worker_payments(organization_id, status);
+
+
+-- =========================================
+-- 11. WORKER PAYMENT ALLOCATIONS
+-- =========================================
+
+CREATE TABLE worker_payment_allocations (
+    id TEXT PRIMARY KEY,
+
+    organization_id TEXT NOT NULL
+        REFERENCES organizations(id)
+        ON DELETE CASCADE,
+
+    worker_payment_id TEXT NOT NULL,
+    production_entry_id TEXT NOT NULL,
+
+    -- Allocated amount in paise.
+    amount BIGINT NOT NULL
+        CHECK (amount > 0),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT fk_worker_payment_allocations_payment
+        FOREIGN KEY (organization_id, worker_payment_id)
+        REFERENCES worker_payments(organization_id, id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_worker_payment_allocations_production_entry
+        FOREIGN KEY (organization_id, production_entry_id)
+        REFERENCES production_entries(organization_id, id)
+        ON DELETE RESTRICT,
+
+    UNIQUE (
+        organization_id,
+        worker_payment_id,
+        production_entry_id
+    )
+);
+
+
+CREATE INDEX idx_worker_payment_allocations_entry
+    ON worker_payment_allocations(
+        organization_id,
+        production_entry_id
+    );
+
+CREATE INDEX idx_worker_payment_allocations_payment
+    ON worker_payment_allocations(
+        organization_id,
+        worker_payment_id
+    );
+
 
 -- =========================================
 -- END OF SCHEMA

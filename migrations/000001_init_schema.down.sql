@@ -6,3 +6,5 @@ DROP TABLE IF EXISTS styles;
 DROP TABLE IF EXISTS bundles;
 DROP TABLE IF EXISTS production_entries;
 DROP TABLE IF EXISTS sizes;
+DROP TABLE IF EXISTS worker_payment_allocations;
+DROP TABLE IF EXISTS worker_payments;

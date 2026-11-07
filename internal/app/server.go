@@ -33,6 +33,7 @@ func NewServer(
 		useCases.Size,
 		useCases.Bundle,
 		useCases.ProductionEntry,
+		useCases.WorkerPayment,
 		log,
 		jwtManager,
 		validator.New(),
