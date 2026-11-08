@@ -40,9 +40,9 @@ type ProductionEntryFilter struct {
 }
 
 type GarmentWorkerFilter struct {
-    Status string
     Search string
-
+    
+    Status entity.WorkerStatus
     Limit  int
     Offset int
 }

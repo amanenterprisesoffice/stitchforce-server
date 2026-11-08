@@ -3,11 +3,14 @@ package organization
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/repo"
 	"stitchforce-server/internal/usecase"
+	"stitchforce-server/internal/usecase/output"
+	"stitchforce-server/internal/usecase/utils"
 	ucutils "stitchforce-server/internal/usecase/utils"
 	"stitchforce-server/pkg/logger"
 )
@@ -112,6 +115,29 @@ func (u *UseCase) Delete(ctx context.Context, id string) error {
 
 	u.logger.InfoContext(ctx, "organization deleted", "id", id)
 	return nil
+}
+
+func (u *UseCase) GetDashboard(
+	ctx context.Context,
+	organizationID string,
+) (*output.OrganizationDashboard, error) {
+	organizationID, err := utils.ValidateOrganizationID(organizationID)
+	if err != nil {
+		return nil, err
+	}
+
+	dashboard, err := u.repository.GetDashboard(
+		ctx,
+		organizationID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"get organization dashboard: %w",
+			err,
+		)
+	}
+
+	return dashboard, nil
 }
 
 var _ usecase.OrganizationUseCase = (*UseCase)(nil)

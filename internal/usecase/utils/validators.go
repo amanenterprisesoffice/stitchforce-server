@@ -186,15 +186,6 @@ func ValidateBundleID(id string) (string, error) {
 	return id, nil
 }
 
-func ValidateWorkerStatus(status entity.WorkerStatus) error {
-	switch status {
-	case entity.WorkerStatusActive, entity.WorkerStatusInactive:
-		return nil
-	default:
-		return errors.New("worker status must be active or inactive")
-	}
-}
-
 func ValidateProductionEntry(
 	entry *entity.ProductionEntry,
 ) error {

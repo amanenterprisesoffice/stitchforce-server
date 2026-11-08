@@ -48,6 +48,6 @@ func NewUseCases(
 		Size:            sizeuc.New(repositories.Sizes, log),
 		Bundle:          bundleuc.New(repositories.Bundles, log),
 		ProductionEntry: productionentryuc.New(repositories.ProductionEntry, repositories.Bundles, repositories.GarmentWorkers, repositories.StyleOperations, repositories.Style, storage, log),
-		WorkerPayment:   workerpaymentuc.New(repositories.WorkerPayments, repositories.GarmentWorkers, log),
+		WorkerPayment:   workerpaymentuc.New(repositories.WorkerPayments, repositories.GarmentWorkers, storage, log),
 	}
 }

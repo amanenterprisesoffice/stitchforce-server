@@ -243,57 +243,62 @@ func (u *UseCase) GetByID(
 // LIST
 
 func (u *UseCase) List(
-	ctx context.Context,
-	organizationID string,
-	filter input.ProductionEntryFilter,
+    ctx context.Context,
+    organizationID string,
+    filter input.ProductionEntryFilter,
 ) ([]*output.ProductionEntry, error) {
 
-	organizationID, err := utils.ValidateOrganizationID(organizationID)
-	if err != nil {
-		return nil, err
-	}
+    organizationID, err := utils.ValidateOrganizationID(organizationID)
+    if err != nil {
+        return nil, err
+    }
 
-	entries, err := u.repository.List(
-		ctx,
-		organizationID,
-		filter,
-	)
-	if err != nil {
-		return nil, err
-	}
+    if filter.Limit <= 0 {
+        filter.Limit = 20
+    }
 
-	if filter.Limit <= 0 {
-		filter.Limit = 20
-	}
+    if filter.Limit > MaxPaginationLimit {
+        filter.Limit = MaxPaginationLimit
+    }
 
-	if filter.Limit > MaxPaginationLimit {
-		filter.Limit = MaxPaginationLimit
-	}
+    if filter.Offset < 0 {
+        filter.Offset = 0
+    }
 
-	if filter.Offset < 0 {
-		filter.Offset = 0
-	}
+    results, err := u.repository.List(
+        ctx,
+        organizationID,
+        filter,
+    )
+    if err != nil {
+        return nil, err
+    }
 
-	results := make([]*output.ProductionEntry, 0, len(entries))
+    for _, entry := range results {
+        if strings.TrimSpace(entry.Worker.PhotoKey) == "" {
+            continue
+        }
 
-	for _, entry := range entries {
-		result, err := u.buildOutput(
-			ctx,
-			organizationID,
-			entry,
-		)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"build production entry output for %s: %w",
-				entry.ID,
-				err,
-			)
-		}
+        photoURL, err := u.storage.SignedURL(
+            ctx,
+            entry.Worker.PhotoKey,
+            15*time.Minute,
+        )
+        if err != nil {
+            return nil, fmt.Errorf(
+                "generate worker photo URL for %s: %w",
+                entry.Worker.ID,
+                err,
+            )
+        }
 
-		results = append(results, result)
-	}
+        entry.Worker.PhotoURL = photoURL
 
-	return results, nil
+        // Never expose the storage key.
+        entry.Worker.PhotoKey = ""
+    }
+
+    return results, nil
 }
 
 // UPDATE

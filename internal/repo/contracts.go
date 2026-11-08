@@ -17,6 +17,10 @@ type OrganizationRepository interface {
 	List(context.Context) ([]*entity.Organization, error)
 	Update(context.Context, *entity.Organization) error
 	Delete(context.Context, string) error
+	GetDashboard(
+		context.Context,
+		string, // organizationID
+	) (*output.OrganizationDashboard, error)
 }
 
 type UserRepository interface {
@@ -175,7 +179,7 @@ type ProductionEntryRepository interface {
 		context.Context,
 		string, // organizationID
 		input.ProductionEntryFilter,
-	) ([]*entity.ProductionEntry, error)
+	) ([]*output.ProductionEntry, error)
 
 	UpdateWithBundleLimit(
 		context.Context,
@@ -208,7 +212,7 @@ type WorkerPaymentRepository interface {
 		context.Context,
 		string, // organizationID
 		input.WorkerPaymentFilter,
-	) ([]*entity.WorkerPayment, error)
+	) ([]*output.WorkerPayment, error)
 
 	GetSummary(
 		context.Context,

@@ -9,6 +9,7 @@ import (
 
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/repo"
+	"stitchforce-server/internal/storage"
 	"stitchforce-server/internal/usecase"
 	"stitchforce-server/internal/usecase/input"
 	"stitchforce-server/internal/usecase/output"
@@ -20,7 +21,9 @@ import (
 type UseCase struct {
 	repository       repo.WorkerPaymentRepository
 	workerRepository repo.GarmentWorkerRepository
-	logger           *logger.Logger
+	storage          storage.Storage
+
+	logger *logger.Logger
 }
 
 const (
@@ -30,11 +33,13 @@ const (
 func New(
 	repository repo.WorkerPaymentRepository,
 	workerRepository repo.GarmentWorkerRepository,
+	storage storage.Storage,
 	logger *logger.Logger,
 ) usecase.WorkerPaymentUseCase {
 	return &UseCase{
 		repository:       repository,
 		workerRepository: workerRepository,
+		storage:          storage,
 		logger:           logger,
 	}
 }
@@ -190,14 +195,17 @@ func (u *UseCase) List(
 	ctx context.Context,
 	organizationID string,
 	filter input.WorkerPaymentFilter,
-) ([]*entity.WorkerPayment, error) {
+) ([]*output.WorkerPayment, error) {
+
 	organizationID, err := utils.ValidateOrganizationID(organizationID)
 	if err != nil {
 		return nil, err
 	}
 
 	filter.WorkerID = strings.TrimSpace(filter.WorkerID)
-	filter.Status = entity.PaymentStatus(strings.TrimSpace(string(filter.Status)))
+	filter.Status = entity.PaymentStatus(
+		strings.TrimSpace(string(filter.Status)),
+	)
 
 	if filter.Status != "" && !filter.Status.Validate() {
 		return nil, errors.New("invalid status")
@@ -222,6 +230,27 @@ func (u *UseCase) List(
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list worker payments: %w", err)
+	}
+
+	for _, payment := range payments {
+		if strings.TrimSpace(payment.Worker.PhotoKey) == "" {
+			continue
+		}
+
+		photoURL, err := u.storage.SignedURL(
+			ctx,
+			payment.Worker.PhotoKey,
+			15*time.Minute,
+		)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"generate worker photo URL: %w",
+				err,
+			)
+		}
+
+		payment.Worker.PhotoURL = photoURL
+		payment.Worker.PhotoKey = ""
 	}
 
 	return payments, nil

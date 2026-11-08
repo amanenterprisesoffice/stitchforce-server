@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/repo"
 	"stitchforce-server/internal/usecase/input"
+	"stitchforce-server/internal/usecase/output"
 )
 
 type Repository struct {
@@ -289,148 +291,210 @@ func (r *Repository) GetByID(
 // LIST
 // =========================================
 
+
 func (r *Repository) List(
-	ctx context.Context,
-	organizationID string,
-	filter input.ProductionEntryFilter,
-) ([]*entity.ProductionEntry, error) {
+    ctx context.Context,
+    organizationID string,
+    filter input.ProductionEntryFilter,
+) ([]*output.ProductionEntry, error) {
 
-	query := `
-		SELECT
-			pe.id,
-			pe.organization_id,
-			pe.bundle_id,
-			pe.worker_id,
-			pe.quantity,
-			pe.production_date,
-			pe.rate_per_piece,
-			pe.style_operation_id,
-			pe.remarks,
-			pe.created_at,
-			pe.updated_at,
-			pe.deleted_at
-		FROM production_entries pe
-		INNER JOIN bundles b
-			ON b.id = pe.bundle_id
-		   AND b.organization_id = pe.organization_id
-		   AND b.deleted_at IS NULL
-		INNER JOIN garment_workers gw
-			ON gw.id = pe.worker_id
-		   AND gw.organization_id = pe.organization_id
-		INNER JOIN style_operations so
-			ON so.id = pe.style_operation_id
-		   AND so.organization_id = pe.organization_id
-		WHERE pe.organization_id = $1
-		  AND pe.deleted_at IS NULL
-	`
+    query := `
+        SELECT
+            pe.id,
+            pe.organization_id,
+            pe.bundle_id,
+            pe.worker_id,
+            pe.style_operation_id,
+            pe.quantity,
+            pe.rate_per_piece,
+            pe.total_amount,
+            pe.production_date,
+            pe.remarks,
+            pe.created_at,
+            pe.updated_at,
 
-	args := []any{organizationID}
-	argPosition := 2
+            gw.id,
+            gw.name,
+            gw.phone,
+            gw.photo_key,
 
-	if filter.Search != "" {
-		query += fmt.Sprintf(`
-			AND (
-				b.bundle_number ILIKE $%d
-				OR gw.name ILIKE $%d
-				OR gw.phone ILIKE $%d
-				OR so.name ILIKE $%d
-			)
-		`, argPosition, argPosition, argPosition, argPosition)
+            b.id,
+            b.bundle_number,
+            b.quantity,
+            b.status,
 
-		args = append(args, "%"+filter.Search+"%")
-		argPosition++
-	}
+            s.id,
+            s.name,
+            s.style_number,
 
-	if filter.BundleID != "" {
-		query += fmt.Sprintf(" AND pe.bundle_id = $%d", argPosition)
-		args = append(args, filter.BundleID)
-		argPosition++
-	}
+            so.id,
+            so.name
 
-	if filter.WorkerID != "" {
-		query += fmt.Sprintf(" AND pe.worker_id = $%d", argPosition)
-		args = append(args, filter.WorkerID)
-		argPosition++
-	}
+        FROM production_entries pe
 
-	if filter.StyleID != "" {
-		query += fmt.Sprintf(" AND b.style_id = $%d", argPosition)
-		args = append(args, filter.StyleID)
-		argPosition++
-	}
+        INNER JOIN bundles b
+            ON b.id = pe.bundle_id
+            AND b.organization_id = pe.organization_id
+            AND b.deleted_at IS NULL
 
-	if filter.StyleOperationID != "" {
-		query += fmt.Sprintf(" AND pe.style_operation_id = $%d", argPosition)
-		args = append(args, filter.StyleOperationID)
-		argPosition++
-	}
+        INNER JOIN garment_workers gw
+            ON gw.id = pe.worker_id
+            AND gw.organization_id = pe.organization_id
+            AND gw.deleted_at IS NULL
 
-	if filter.FromDate != nil {
-		query += fmt.Sprintf(" AND pe.production_date >= $%d", argPosition)
-		args = append(args, *filter.FromDate)
-		argPosition++
-	}
+        INNER JOIN styles s
+            ON s.id = b.style_id
+            AND s.organization_id = pe.organization_id
 
-	if filter.ToDate != nil {
-		query += fmt.Sprintf(" AND pe.production_date < $%d", argPosition)
-		args = append(args, *filter.ToDate)
-		argPosition++
-	}
+        INNER JOIN style_operations so
+            ON so.id = pe.style_operation_id
+            AND so.organization_id = pe.organization_id
+            AND so.style_id = b.style_id
 
-	query += " ORDER BY pe.production_date DESC, pe.created_at DESC"
+        WHERE pe.organization_id = $1
+          AND pe.deleted_at IS NULL
+    `
 
-	limit := filter.Limit
-	offset := filter.Offset
-	query += fmt.Sprintf(
-		" LIMIT $%d OFFSET $%d",
-		argPosition,
-		argPosition+1,
-	)
+    args := []any{organizationID}
+    argPosition := 2
 
-	args = append(args, limit, offset)
+    if filter.Search != "" {
+        query += fmt.Sprintf(`
+            AND (
+                b.bundle_number ILIKE $%d
+                OR gw.name ILIKE $%d
+                OR gw.phone ILIKE $%d
+                OR so.name ILIKE $%d
+            )
+        `, argPosition, argPosition, argPosition, argPosition)
 
-	rows, err := r.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
+        args = append(args, "%"+filter.Search+"%")
+        argPosition++
+    }
 
-	entries := make([]*entity.ProductionEntry, 0)
+    if filter.BundleID != "" {
+        query += fmt.Sprintf(
+            " AND pe.bundle_id = $%d",
+            argPosition,
+        )
+        args = append(args, filter.BundleID)
+        argPosition++
+    }
 
-	for rows.Next() {
-		entry := &entity.ProductionEntry{}
-		var deletedAt sql.NullTime
+    if filter.WorkerID != "" {
+        query += fmt.Sprintf(
+            " AND pe.worker_id = $%d",
+            argPosition,
+        )
+        args = append(args, filter.WorkerID)
+        argPosition++
+    }
 
-		if err := rows.Scan(
-			&entry.ID,
-			&entry.OrganizationID,
-			&entry.BundleID,
-			&entry.WorkerID,
-			&entry.Quantity,
-			&entry.ProductionDate,
-			&entry.RatePerPiece,
-			&entry.StyleOperationID,
-			&entry.Remarks,
-			&entry.CreatedAt,
-			&entry.UpdatedAt,
-			&deletedAt,
-		); err != nil {
-			return nil, err
-		}
+    if filter.StyleID != "" {
+        query += fmt.Sprintf(
+            " AND b.style_id = $%d",
+            argPosition,
+        )
+        args = append(args, filter.StyleID)
+        argPosition++
+    }
 
-		if deletedAt.Valid {
-			entry.DeletedAt = &deletedAt.Time
-		}
+    if filter.StyleOperationID != "" {
+        query += fmt.Sprintf(
+            " AND pe.style_operation_id = $%d",
+            argPosition,
+        )
+        args = append(args, filter.StyleOperationID)
+        argPosition++
+    }
 
-		entries = append(entries, entry)
-	}
+    if filter.FromDate != nil {
+        query += fmt.Sprintf(
+            " AND pe.production_date >= $%d",
+            argPosition,
+        )
+        args = append(args, *filter.FromDate)
+        argPosition++
+    }
 
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
+    if filter.ToDate != nil {
+        query += fmt.Sprintf(
+            " AND pe.production_date < $%d",
+            argPosition,
+        )
+        args = append(args, *filter.ToDate)
+        argPosition++
+    }
 
-	return entries, nil
+    limit := filter.Limit
+    offset := filter.Offset
+    query += fmt.Sprintf(`
+        ORDER BY pe.production_date DESC, pe.created_at DESC
+        LIMIT $%d OFFSET $%d
+    `, argPosition, argPosition+1)
+
+    args = append(args, limit, offset)
+
+    rows, err := r.db.QueryContext(ctx, query, args...)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+
+    results := make([]*output.ProductionEntry, 0)
+
+    for rows.Next() {
+        entry := &output.ProductionEntry{}
+
+        err := rows.Scan(
+            &entry.ID,
+            &entry.OrganizationID,
+            &entry.BundleID,
+            &entry.WorkerID,
+            &entry.StyleOperationID,
+            &entry.Quantity,
+            &entry.RatePerPiece,
+            &entry.TotalAmount,
+            &entry.ProductionDate,
+            &entry.Remarks,
+            &entry.CreatedAt,
+            &entry.UpdatedAt,
+
+            &entry.Worker.ID,
+            &entry.Worker.Name,
+            &entry.Worker.Phone,
+            &entry.Worker.PhotoKey,
+
+            &entry.Bundle.ID,
+            &entry.Bundle.BundleNumber,
+            &entry.Bundle.Quantity,
+            &entry.Bundle.Status,
+
+            &entry.Style.ID,
+            &entry.Style.Name,
+            &entry.Style.StyleNumber,
+
+            &entry.Operation.ID,
+            &entry.Operation.Name,
+        )
+
+        if err != nil {
+            return nil, err
+        }
+
+        entry.Bundle.Status = strings.TrimSpace(entry.Bundle.Status)
+        entry.Operation.RatePerPiece = entry.RatePerPiece
+
+        results = append(results, entry)
+    }
+
+    if err := rows.Err(); err != nil {
+        return nil, err
+    }
+
+    return results, nil
 }
+
 
 // =========================================
 // UPDATE WITH BUNDLE QUANTITY LIMIT

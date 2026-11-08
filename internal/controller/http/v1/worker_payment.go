@@ -7,10 +7,13 @@ import (
 	"strings"
 	"time"
 
+	"stitchforce-server/internal/controller/http/v1/exports"
 	"stitchforce-server/internal/controller/http/v1/request"
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/usecase"
 	"stitchforce-server/internal/usecase/input"
+	"stitchforce-server/internal/usecase/output"
+	"stitchforce-server/pkg/exporter"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -432,4 +435,129 @@ func (h *WorkerPaymentHandler) Void(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "worker payment voided successfully",
 	})
+}
+
+
+
+func (h *WorkerPaymentHandler) Export(c *gin.Context) {
+	organizationID := c.Param("organizationID")
+
+	if organizationID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "organization id is required",
+		})
+		return
+	}
+
+	format := strings.ToLower(
+		strings.TrimSpace(c.DefaultQuery("format", "xlsx")),
+	)
+
+	if format != "pdf" && format != "xlsx" && format != "csv" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid format; supported formats are pdf, xlsx, csv",
+		})
+		return
+	}
+
+	filter := input.WorkerPaymentFilter{
+		WorkerID: strings.TrimSpace(c.Query("worker_id")),
+		Limit:    100,
+		Offset:   0,
+	}
+
+	if value := strings.TrimSpace(c.Query("status")); value != "" {
+		filter.Status = entity.PaymentStatus(value)
+	}
+
+	if value := c.Query("from_date"); value != "" {
+		date, err := time.Parse(DateLayout, value)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf(
+					"incorrect from_date format; expected %s",
+					DateLayout,
+				),
+			})
+			return
+		}
+
+		filter.FromDate = &date
+	}
+
+	if value := c.Query("to_date"); value != "" {
+		date, err := time.Parse(DateLayout, value)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf(
+					"incorrect to_date format; expected %s",
+					DateLayout,
+				),
+			})
+			return
+		}
+
+		filter.ToDate = &date
+	}
+
+	if filter.FromDate != nil &&
+		filter.ToDate != nil &&
+		filter.ToDate.Before(*filter.FromDate) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "to_date cannot be before from_date",
+		})
+		return
+	}
+
+	// Fetch all matching payments.
+	const batchSize = 100
+
+	payments := make([]*output.WorkerPayment, 0)
+	offset := 0
+
+	for {
+		filter.Limit = batchSize
+		filter.Offset = offset
+
+		batch, err := h.payments.List(
+			c.Request.Context(),
+			organizationID,
+			filter,
+		)
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+
+		payments = append(payments, batch...)
+
+		if len(batch) < batchSize {
+			break
+		}
+
+		offset += batchSize
+	}
+
+	// Build export data.
+	data := exports.BuildWorkerPayments(payments)
+
+	data.Filename = fmt.Sprintf(
+		"worker-payments-%s",
+		time.Now().Format("20060102-150405"),
+	)
+
+	// Generate file.
+	content, contentType, err := exporter.Render(format, data)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
+	c.Header("Content-Type", contentType)
+	c.Header(
+		"Content-Disposition",
+		exporter.ContentDisposition(data.Filename, format),
+	)
+
+	c.Data(http.StatusOK, contentType, content)
 }

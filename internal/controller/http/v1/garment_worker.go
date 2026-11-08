@@ -133,8 +133,8 @@ func (h *GarmentWorkerHandler) List(c *gin.Context) {
 	)
 
 	filter := input.GarmentWorkerFilter{
-		Status: c.Query(Status),
-		Search: strings.TrimSpace(c.Query(Search)),
+		Search: c.Query(Search),
+		Status: entity.WorkerStatus(strings.TrimSpace(c.Query(Status))),
 		Limit:  20,
 		Offset: 0,
 	}

@@ -14,6 +14,10 @@ type OrganizationUseCase interface {
 	List(context.Context) ([]*entity.Organization, error)
 	Update(context.Context, *entity.Organization) error
 	Delete(context.Context, string) error
+	GetDashboard(
+		context.Context,
+		string, // organizationID
+	) (*output.OrganizationDashboard, error)
 }
 
 type UserUseCase interface {
@@ -142,7 +146,7 @@ type BundleUseCase interface {
 	List(
 		context.Context,
 		string, // organizationID
-		 input.BundleFilter,
+		input.BundleFilter,
 	) ([]*entity.Bundle, error)
 
 	Update(
@@ -194,7 +198,6 @@ type GarmentWorkerUseCase interface {
 	) error
 }
 
-
 type ProductionEntryUseCase interface {
 	Create(
 		context.Context,
@@ -211,7 +214,7 @@ type ProductionEntryUseCase interface {
 	List(
 		context.Context,
 		string,
-		 input.ProductionEntryFilter,
+		input.ProductionEntryFilter,
 	) ([]*output.ProductionEntry, error)
 
 	Update(
@@ -227,42 +230,41 @@ type ProductionEntryUseCase interface {
 	) error
 }
 
-
 type WorkerPaymentUseCase interface {
-    Create(
-        context.Context,
-        string, // organizationID
-        *input.CreateWorkerPaymentInput,
-    ) error
+	Create(
+		context.Context,
+		string, // organizationID
+		*input.CreateWorkerPaymentInput,
+	) error
 
-    GetByID(
-        context.Context,
-        string, // organizationID
-        string, // paymentID
-    ) (*output.WorkerPayment, error)
+	GetByID(
+		context.Context,
+		string, // organizationID
+		string, // paymentID
+	) (*output.WorkerPayment, error)
 
-    List(
-        context.Context,
-        string, // organizationID
-        input.WorkerPaymentFilter,
-    ) ([]*entity.WorkerPayment, error)
+	List(
+		context.Context,
+		string, // organizationID
+		input.WorkerPaymentFilter,
+	) ([]*output.WorkerPayment, error)
 
-    GetSummary(
-        context.Context,
-        string, // organizationID
-        input.WorkerPaymentSummaryFilter,
-    ) (*output.WorkerPaymentSummary, error)
+	GetSummary(
+		context.Context,
+		string, // organizationID
+		input.WorkerPaymentSummaryFilter,
+	) (*output.WorkerPaymentSummary, error)
 
-    GetPayableEntries(
-        context.Context,
-        string, // organizationID
-        string, // workerID
-        input.PayableEntriesFilter,
-    ) ([]*output.PayableProductionEntry, error)
+	GetPayableEntries(
+		context.Context,
+		string, // organizationID
+		string, // workerID
+		input.PayableEntriesFilter,
+	) ([]*output.PayableProductionEntry, error)
 
-    Void(
-        context.Context,
-        string, // organizationID
-        string, // paymentID
-    ) error
+	Void(
+		context.Context,
+		string, // organizationID
+		string, // paymentID
+	) error
 }

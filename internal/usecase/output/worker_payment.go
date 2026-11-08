@@ -19,7 +19,7 @@ type WorkerPayment struct {
 
 	CreatedAt       time.Time             `json:"created_at" db:"created_at"`
 	UpdatedAt       time.Time             `json:"updated_at" db:"updated_at"`
-	ProductionEntry []PaidProductionEntry     `json:"production_entry" db:"production_entry"`
+	ProductionEntry []PaidProductionEntry `json:"production_entry" db:"production_entry"`
 	Worker          ProductionEntryWorker `json:"worker" db:"worker"`
 }
 

@@ -10,11 +10,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 
+	"stitchforce-server/internal/controller/http/v1/exports"
 	"stitchforce-server/internal/controller/http/v1/request"
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/usecase"
 	"stitchforce-server/internal/usecase/input"
 	"stitchforce-server/internal/usecase/output"
+	"stitchforce-server/pkg/exporter"
 )
 
 type ProductionEntryHandler struct {
@@ -278,7 +280,6 @@ func (h *ProductionEntryHandler) Delete(c *gin.Context) {
 	})
 }
 
-
 func (h *ProductionEntryHandler) Export(c *gin.Context) {
 	organizationID := c.Param("organizationID")
 
@@ -289,7 +290,9 @@ func (h *ProductionEntryHandler) Export(c *gin.Context) {
 		return
 	}
 
-	format := strings.ToLower(strings.TrimSpace(c.DefaultQuery("format", "xlsx")))
+	format := strings.ToLower(
+		strings.TrimSpace(c.DefaultQuery("format", "xlsx")),
+	)
 
 	if format != "pdf" && format != "xlsx" && format != "csv" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -306,7 +309,6 @@ func (h *ProductionEntryHandler) Export(c *gin.Context) {
 		StyleOperationID: c.Query("style_operation_id"),
 	}
 
-	// Parse from_date.
 	if value := c.Query("from_date"); value != "" {
 		date, err := time.Parse(DateLayout, value)
 		if err != nil {
@@ -319,7 +321,6 @@ func (h *ProductionEntryHandler) Export(c *gin.Context) {
 		filter.FromDate = &date
 	}
 
-	// Parse inclusive to_date.
 	if value := c.Query("to_date"); value != "" {
 		date, err := time.Parse(DateLayout, value)
 		if err != nil {
@@ -362,25 +363,26 @@ func (h *ProductionEntryHandler) Export(c *gin.Context) {
 		offset += batchSize
 	}
 
-	filename := fmt.Sprintf(
+	// Prepare export data.
+	data := exports.BuildProductionEntryExport(entries)
+
+	data.Filename = fmt.Sprintf(
 		"production-entries-%s",
 		time.Now().Format("20060102-150405"),
 	)
 
-	switch format {
-	case "csv":
-		if err := exportProductionEntriesCSV(c, entries, filename); err != nil {
-			writeError(c, err)
-		}
-
-	case "xlsx":
-		if err := exportProductionEntriesExcel(c, entries, filename); err != nil {
-			writeError(c, err)
-		}
-
-	case "pdf":
-		if err := exportProductionEntriesPDF(c, entries, filename); err != nil {
-			writeError(c, err)
-		}
+	// Generate file.
+	content, contentType, err := exporter.Render(format, data)
+	if err != nil {
+		writeError(c, err)
+		return
 	}
+
+	c.Header("Content-Type", contentType)
+	c.Header(
+		"Content-Disposition",
+		exporter.ContentDisposition(data.Filename, format),
+	)
+
+	c.Data(http.StatusOK, contentType, content)
 }

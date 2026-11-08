@@ -10,7 +10,7 @@ type GarmentWorker struct {
 	Name           string     `json:"name" db:"name"`
 	Phone          string     `json:"phone" db:"phone"`
 	Gender         string     `json:"gender" db:"gender"`
-	PhotoKey       string     `json:"photo_key" db:"photo_key"`
+	PhotoKey       string     `json:"-" db:"photo_key"`
 
 	Status         WorkerStatus     `json:"status" db:"status"` // active, inactive
 
@@ -25,3 +25,12 @@ const (
 	WorkerStatusActive   WorkerStatus = "active"
 	WorkerStatusInactive WorkerStatus = "inactive"
 )
+
+func (ws WorkerStatus) IsValid() bool {
+	switch ws {
+	case WorkerStatusActive, WorkerStatusInactive:
+		return true
+	default:
+		return false
+	}
+}

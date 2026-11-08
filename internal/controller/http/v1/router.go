@@ -40,7 +40,7 @@ func NewRouter(
 			"message": "ok",
 		})
 	})
-
+	organizationHandler := NewOrganizationHandler(organizationUseCase, validate)
 	userHandler := NewUserHandler(users, validate, jwtManager)
 	styleHandler := NewStyleHandler(styleUseCase, validate)
 	styleOperationHandler := NewStyleOperationHandler(styleOperationUseCase, validate)
@@ -72,6 +72,11 @@ func NewRouter(
 			}
 			organizations := protected.Group("/organizations/:organizationID")
 			{
+				organizations.GET("", organizationHandler.GetByID)
+				organizations.PUT("", organizationHandler.Update)
+				organizations.DELETE("", organizationHandler.Delete)
+
+				organizations.GET("/dashboard", organizationHandler.GetDashboard)
 
 				styles := organizations.Group("/styles")
 				{
@@ -126,6 +131,7 @@ func NewRouter(
 					workerPayments.POST("", workerPaymentHandler.Create)
 					workerPayments.GET("/summary", workerPaymentHandler.GetSummary)
 					workerPayments.GET("", workerPaymentHandler.List)
+					workerPayments.GET("/export", workerPaymentHandler.Export)
 					workerPayments.GET("/:id", workerPaymentHandler.Get)
 					workerPayments.PATCH("/:id/void", workerPaymentHandler.Void)
 				}

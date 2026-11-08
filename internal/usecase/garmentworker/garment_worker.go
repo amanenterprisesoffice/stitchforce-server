@@ -189,6 +189,13 @@ func (u *UseCase) List(
 		return nil, err
 	}
 
+	// if status exist then validate
+	if filter.Status != "" {
+		if !filter.Status.IsValid() {
+			return nil, errors.New("invalid worker status")
+		}
+	}
+
 	if filter.Limit <= 0 {
 		filter.Limit = 20
 	}
@@ -278,8 +285,8 @@ func (u *UseCase) SetStatus(
 		return errors.New("garment worker id is required")
 	}
 
-	if err := ucutils.ValidateWorkerStatus(status); err != nil {
-		return err
+	if !status.IsValid() {
+		return errors.New("invalid worker status")
 	}
 
 	worker, err := u.repository.GetByID(

@@ -450,71 +450,88 @@ func (r *WorkerPaymentRepository) GetByID(
 }
 
 // LIST
-
 func (r *WorkerPaymentRepository) List(
 	ctx context.Context,
 	organizationID string,
 	filter input.WorkerPaymentFilter,
-) ([]*entity.WorkerPayment, error) {
+) ([]*output.WorkerPayment, error) {
+
 	query := `
 		SELECT
-			id,
-			organization_id,
-			worker_id,
-			amount,
-			payment_date,
-			payment_method,
-			reference,
-			remarks,
-			status,
-			created_at,
-			updated_at
-		FROM worker_payments
-		WHERE organization_id = $1
+			wp.id,
+			wp.organization_id,
+			wp.worker_id,
+			wp.amount,
+			wp.payment_date,
+			wp.payment_method,
+			wp.reference,
+			wp.remarks,
+			wp.status,
+			wp.created_at,
+			wp.updated_at,
+
+			gw.id,
+			gw.name,
+			COALESCE(gw.phone, ''),
+			COALESCE(gw.photo_key, '')
+
+		FROM worker_payments wp
+
+		INNER JOIN garment_workers gw
+			ON gw.id = wp.worker_id
+			AND gw.organization_id = wp.organization_id
+
+		WHERE wp.organization_id = $1
 	`
 
-	args := []interface{}{organizationID}
+	args := []any{organizationID}
+	argPosition := 2
 
 	if filter.WorkerID != "" {
-		args = append(args, filter.WorkerID)
 		query += fmt.Sprintf(
-			" AND worker_id = $%d",
-			len(args),
+			" AND wp.worker_id = $%d",
+			argPosition,
 		)
+		args = append(args, filter.WorkerID)
+		argPosition++
 	}
 
 	if filter.Status != "" {
-		args = append(args, filter.Status)
 		query += fmt.Sprintf(
-			" AND status = $%d",
-			len(args),
+			" AND wp.status = $%d",
+			argPosition,
 		)
+		args = append(args, filter.Status)
+		argPosition++
 	}
 
 	if filter.FromDate != nil {
-		args = append(args, *filter.FromDate)
 		query += fmt.Sprintf(
-			" AND payment_date >= $%d",
-			len(args),
+			" AND wp.payment_date >= $%d",
+			argPosition,
 		)
+		args = append(args, *filter.FromDate)
+		argPosition++
 	}
 
 	if filter.ToDate != nil {
-		args = append(args, filter.ToDate.AddDate(0, 0, 1))
 		query += fmt.Sprintf(
-			" AND payment_date < $%d",
-			len(args),
+			" AND wp.payment_date < $%d",
+			argPosition,
 		)
+		args = append(args, filter.ToDate.AddDate(0, 0, 1))
+		argPosition++
 	}
 
-	args = append(args, filter.Limit)
-	query += fmt.Sprintf(
-		" ORDER BY payment_date DESC, created_at DESC LIMIT $%d",
-		len(args),
-	)
+	limit := filter.Limit
+	offset := filter.Offset
 
-	args = append(args, filter.Offset)
-	query += fmt.Sprintf(" OFFSET $%d", len(args))
+	query += fmt.Sprintf(`
+		ORDER BY wp.payment_date DESC, wp.created_at DESC
+		LIMIT $%d OFFSET $%d
+	`, argPosition, argPosition+1)
+
+	args = append(args, limit, offset)
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -522,10 +539,10 @@ func (r *WorkerPaymentRepository) List(
 	}
 	defer rows.Close()
 
-	payments := make([]*entity.WorkerPayment, 0)
+	payments := make([]*output.WorkerPayment, 0)
 
 	for rows.Next() {
-		var payment entity.WorkerPayment
+		payment := &output.WorkerPayment{}
 
 		if err := rows.Scan(
 			&payment.ID,
@@ -539,11 +556,16 @@ func (r *WorkerPaymentRepository) List(
 			&payment.Status,
 			&payment.CreatedAt,
 			&payment.UpdatedAt,
+
+			&payment.Worker.ID,
+			&payment.Worker.Name,
+			&payment.Worker.Phone,
+			&payment.Worker.PhotoKey,
 		); err != nil {
 			return nil, fmt.Errorf("scan worker payment: %w", err)
 		}
 
-		payments = append(payments, &payment)
+		payments = append(payments, payment)
 	}
 
 	if err := rows.Err(); err != nil {
