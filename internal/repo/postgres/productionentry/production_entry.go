@@ -291,211 +291,277 @@ func (r *Repository) GetByID(
 // LIST
 // =========================================
 
-
 func (r *Repository) List(
-    ctx context.Context,
-    organizationID string,
-    filter input.ProductionEntryFilter,
+	ctx context.Context,
+	organizationID string,
+	filter input.ProductionEntryFilter,
 ) ([]*output.ProductionEntry, error) {
 
-    query := `
-        SELECT
-            pe.id,
-            pe.organization_id,
-            pe.bundle_id,
-            pe.worker_id,
-            pe.style_operation_id,
-            pe.quantity,
-            pe.rate_per_piece,
-            pe.total_amount,
-            pe.production_date,
-            pe.remarks,
-            pe.created_at,
-            pe.updated_at,
+	query := `
+		SELECT
+			pe.id,
+			pe.organization_id,
+			pe.bundle_id,
+			pe.worker_id,
+			pe.style_operation_id,
+			pe.quantity,
+			pe.rate_per_piece,
+			pe.total_amount,
+			pe.production_date,
+			pe.remarks,
+			pe.created_at,
+			pe.updated_at,
 
-            gw.id,
-            gw.name,
-            gw.phone,
-            gw.photo_key,
+			COALESCE(payment.paid_amount, 0) AS paid_amount,
 
-            b.id,
-            b.bundle_number,
-            b.quantity,
-            b.status,
+			GREATEST(
+				pe.total_amount - COALESCE(payment.paid_amount, 0),
+				0
+			) AS pending_amount,
 
-            s.id,
-            s.name,
-            s.style_number,
+			CASE
+				WHEN COALESCE(payment.paid_amount, 0) >= pe.total_amount
+					THEN 'paid'
+				WHEN COALESCE(payment.paid_amount, 0) > 0
+					THEN 'partially_paid'
+				ELSE 'pending'
+			END AS payment_status,
 
-            so.id,
-            so.name
+			gw.id,
+			gw.name,
+			gw.phone,
+			gw.photo_key,
 
-        FROM production_entries pe
+			b.id,
+			b.bundle_number,
+			b.quantity,
+			b.status,
 
-        INNER JOIN bundles b
-            ON b.id = pe.bundle_id
-            AND b.organization_id = pe.organization_id
-            AND b.deleted_at IS NULL
+			s.id,
+			s.name,
+			s.style_number,
 
-        INNER JOIN garment_workers gw
-            ON gw.id = pe.worker_id
-            AND gw.organization_id = pe.organization_id
-            AND gw.deleted_at IS NULL
+			so.id,
+			so.name
 
-        INNER JOIN styles s
-            ON s.id = b.style_id
-            AND s.organization_id = pe.organization_id
+		FROM production_entries pe
 
-        INNER JOIN style_operations so
-            ON so.id = pe.style_operation_id
-            AND so.organization_id = pe.organization_id
-            AND so.style_id = b.style_id
+		INNER JOIN bundles b
+			ON b.id = pe.bundle_id
+			AND b.organization_id = pe.organization_id
+			AND b.deleted_at IS NULL
 
-        WHERE pe.organization_id = $1
-          AND pe.deleted_at IS NULL
-    `
+		INNER JOIN garment_workers gw
+			ON gw.id = pe.worker_id
+			AND gw.organization_id = pe.organization_id
+			AND gw.deleted_at IS NULL
 
-    args := []any{organizationID}
-    argPosition := 2
+		INNER JOIN styles s
+			ON s.id = b.style_id
+			AND s.organization_id = pe.organization_id
 
-    if filter.Search != "" {
-        query += fmt.Sprintf(`
-            AND (
-                b.bundle_number ILIKE $%d
-                OR gw.name ILIKE $%d
-                OR gw.phone ILIKE $%d
-                OR so.name ILIKE $%d
-            )
-        `, argPosition, argPosition, argPosition, argPosition)
+		INNER JOIN style_operations so
+			ON so.id = pe.style_operation_id
+			AND so.organization_id = pe.organization_id
+			AND so.style_id = b.style_id
 
-        args = append(args, "%"+filter.Search+"%")
-        argPosition++
-    }
+		LEFT JOIN LATERAL (
+			SELECT COALESCE(SUM(wpa.amount), 0) AS paid_amount
 
-    if filter.BundleID != "" {
-        query += fmt.Sprintf(
-            " AND pe.bundle_id = $%d",
-            argPosition,
-        )
-        args = append(args, filter.BundleID)
-        argPosition++
-    }
+			FROM worker_payment_allocations wpa
 
-    if filter.WorkerID != "" {
-        query += fmt.Sprintf(
-            " AND pe.worker_id = $%d",
-            argPosition,
-        )
-        args = append(args, filter.WorkerID)
-        argPosition++
-    }
+			INNER JOIN worker_payments wp
+				ON wp.id = wpa.worker_payment_id
+				AND wp.organization_id = wpa.organization_id
 
-    if filter.StyleID != "" {
-        query += fmt.Sprintf(
-            " AND b.style_id = $%d",
-            argPosition,
-        )
-        args = append(args, filter.StyleID)
-        argPosition++
-    }
+			WHERE wpa.organization_id = pe.organization_id
+				AND wpa.production_entry_id = pe.id
+				AND wp.status = $2
+		) payment ON TRUE
 
-    if filter.StyleOperationID != "" {
-        query += fmt.Sprintf(
-            " AND pe.style_operation_id = $%d",
-            argPosition,
-        )
-        args = append(args, filter.StyleOperationID)
-        argPosition++
-    }
+		WHERE pe.organization_id = $1
+			AND pe.deleted_at IS NULL
+	`
 
-    if filter.FromDate != nil {
-        query += fmt.Sprintf(
-            " AND pe.production_date >= $%d",
-            argPosition,
-        )
-        args = append(args, *filter.FromDate)
-        argPosition++
-    }
+	args := []any{
+		organizationID,
+		entity.PaymentStatusCompleted,
+	}
 
-    if filter.ToDate != nil {
-        query += fmt.Sprintf(
-            " AND pe.production_date < $%d",
-            argPosition,
-        )
-        args = append(args, *filter.ToDate)
-        argPosition++
-    }
+	argPosition := 3
 
-    limit := filter.Limit
-    offset := filter.Offset
-    query += fmt.Sprintf(`
-        ORDER BY pe.production_date DESC, pe.created_at DESC
-        LIMIT $%d OFFSET $%d
-    `, argPosition, argPosition+1)
+	if filter.Search != "" {
+		query += fmt.Sprintf(`
+			AND (
+				b.bundle_number ILIKE $%d
+				OR gw.name ILIKE $%d
+				OR gw.phone ILIKE $%d
+				OR so.name ILIKE $%d
+			)
+		`, argPosition, argPosition, argPosition, argPosition)
 
-    args = append(args, limit, offset)
+		args = append(args, "%"+filter.Search+"%")
+		argPosition++
+	}
 
-    rows, err := r.db.QueryContext(ctx, query, args...)
-    if err != nil {
-        return nil, err
-    }
-    defer rows.Close()
+	if filter.BundleID != "" {
+		query += fmt.Sprintf(
+			" AND pe.bundle_id = $%d",
+			argPosition,
+		)
+		args = append(args, filter.BundleID)
+		argPosition++
+	}
 
-    results := make([]*output.ProductionEntry, 0)
+	if filter.WorkerID != "" {
+		query += fmt.Sprintf(
+			" AND pe.worker_id = $%d",
+			argPosition,
+		)
+		args = append(args, filter.WorkerID)
+		argPosition++
+	}
 
-    for rows.Next() {
-        entry := &output.ProductionEntry{}
+	if filter.StyleID != "" {
+		query += fmt.Sprintf(
+			" AND b.style_id = $%d",
+			argPosition,
+		)
+		args = append(args, filter.StyleID)
+		argPosition++
+	}
 
-        err := rows.Scan(
-            &entry.ID,
-            &entry.OrganizationID,
-            &entry.BundleID,
-            &entry.WorkerID,
-            &entry.StyleOperationID,
-            &entry.Quantity,
-            &entry.RatePerPiece,
-            &entry.TotalAmount,
-            &entry.ProductionDate,
-            &entry.Remarks,
-            &entry.CreatedAt,
-            &entry.UpdatedAt,
+	if filter.StyleOperationID != "" {
+		query += fmt.Sprintf(
+			" AND pe.style_operation_id = $%d",
+			argPosition,
+		)
+		args = append(args, filter.StyleOperationID)
+		argPosition++
+	}
 
-            &entry.Worker.ID,
-            &entry.Worker.Name,
-            &entry.Worker.Phone,
-            &entry.Worker.PhotoKey,
+	if filter.FromDate != nil {
+		query += fmt.Sprintf(
+			" AND pe.production_date >= $%d",
+			argPosition,
+		)
+		args = append(args, *filter.FromDate)
+		argPosition++
+	}
 
-            &entry.Bundle.ID,
-            &entry.Bundle.BundleNumber,
-            &entry.Bundle.Quantity,
-            &entry.Bundle.Status,
+	if filter.ToDate != nil {
+		query += fmt.Sprintf(
+			" AND pe.production_date < $%d",
+			argPosition,
+		)
+		args = append(args, *filter.ToDate)
+		argPosition++
+	}
 
-            &entry.Style.ID,
-            &entry.Style.Name,
-            &entry.Style.StyleNumber,
+	// PAYMENT STATUS FILTER
 
-            &entry.Operation.ID,
-            &entry.Operation.Name,
-        )
+	switch filter.PaymentStatus {
+	case entity.ProductionEntryPaymentStatusPayable:
+		query += `
+			AND pe.total_amount - COALESCE(payment.paid_amount, 0) > 0
+		`
 
-        if err != nil {
-            return nil, err
-        }
+	case entity.ProductionEntryPaymentStatusPending:
+		query += `
+			AND COALESCE(payment.paid_amount, 0) = 0
+		`
 
-        entry.Bundle.Status = strings.TrimSpace(entry.Bundle.Status)
-        entry.Operation.RatePerPiece = entry.RatePerPiece
+	case entity.ProductionEntryPaymentStatusPartiallyPaid:
+		query += `
+			AND COALESCE(payment.paid_amount, 0) > 0
+			AND payment.paid_amount < pe.total_amount
+		`
 
-        results = append(results, entry)
-    }
+	case entity.ProductionEntryPaymentStatusPaid:
+		query += `
+			AND COALESCE(payment.paid_amount, 0) >= pe.total_amount
+		`
+	}
 
-    if err := rows.Err(); err != nil {
-        return nil, err
-    }
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 10
+	}
 
-    return results, nil
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query += fmt.Sprintf(`
+		ORDER BY pe.production_date DESC, pe.created_at DESC
+		LIMIT $%d OFFSET $%d
+	`, argPosition, argPosition+1)
+
+	args = append(args, limit, offset)
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list production entries: %w", err)
+	}
+	defer rows.Close()
+
+	results := make([]*output.ProductionEntry, 0)
+
+	for rows.Next() {
+		entry := &output.ProductionEntry{}
+
+		err := rows.Scan(
+			&entry.ID,
+			&entry.OrganizationID,
+			&entry.BundleID,
+			&entry.WorkerID,
+			&entry.StyleOperationID,
+			&entry.Quantity,
+			&entry.RatePerPiece,
+			&entry.TotalAmount,
+			&entry.ProductionDate,
+			&entry.Remarks,
+			&entry.CreatedAt,
+			&entry.UpdatedAt,
+
+			&entry.PaidAmount,
+			&entry.PendingAmount,
+			&entry.PaymentStatus,
+
+			&entry.Worker.ID,
+			&entry.Worker.Name,
+			&entry.Worker.Phone,
+			&entry.Worker.PhotoKey,
+
+			&entry.Bundle.ID,
+			&entry.Bundle.BundleNumber,
+			&entry.Bundle.Quantity,
+			&entry.Bundle.Status,
+
+			&entry.Style.ID,
+			&entry.Style.Name,
+			&entry.Style.StyleNumber,
+
+			&entry.Operation.ID,
+			&entry.Operation.Name,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scan production entry: %w", err)
+		}
+
+		entry.Bundle.Status = strings.TrimSpace(entry.Bundle.Status)
+		entry.Operation.RatePerPiece = entry.RatePerPiece
+
+		results = append(results, entry)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate production entries: %w", err)
+	}
+
+	return results, nil
 }
-
-
 // =========================================
 // UPDATE WITH BUNDLE QUANTITY LIMIT
 // =========================================

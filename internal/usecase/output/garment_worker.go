@@ -17,3 +17,12 @@ type GarmentWorker struct {
 	UpdatedAt      time.Time           `json:"updated_at"`
 	DeletedAt      *time.Time          `json:"deleted_at,omitempty"`
 }
+
+type SlimWorker struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Phone    string `json:"phone"`
+	PhotoKey string `json:"-" db:"photo_key"`
+
+	PhotoURL string `json:"photo_url,omitempty"`
+}

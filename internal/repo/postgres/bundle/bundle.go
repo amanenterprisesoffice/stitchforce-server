@@ -9,6 +9,7 @@ import (
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/repo"
 	"stitchforce-server/internal/usecase/input"
+	"stitchforce-server/internal/usecase/output"
 )
 
 type Repository struct {
@@ -121,7 +122,8 @@ func (r *Repository) GetByID(
 	ctx context.Context,
 	organizationID string,
 	bundleID string,
-) (*entity.Bundle, error) {
+) (*output.BundleDetail, error) {
+
 	bundle, err := scanBundle(r.db.QueryRowContext(
 		ctx,
 		`SELECT `+selectColumns+`
@@ -141,7 +143,137 @@ func (r *Repository) GetByID(
 		return nil, err
 	}
 
-	return bundle, nil
+	detail := &output.BundleDetail{
+		ID:             bundle.ID,
+		OrganizationID: bundle.OrganizationID,
+		BundleNumber:   bundle.BundleNumber,
+		StyleID:        bundle.StyleID,
+		SizeID:         bundle.SizeID,
+		Quantity:       bundle.Quantity,
+		Attributes:     bundle.Attributes,
+		Status:         bundle.Status,
+		Remarks:        bundle.Remarks,
+		CreatedAt:      bundle.CreatedAt,
+		UpdatedAt:      bundle.UpdatedAt,
+		Operations:     make([]output.BundleOperationProgress, 0),
+	}
+
+	query := `
+        SELECT
+            so.id,
+            so.name,
+            so.rate_per_piece,
+
+            gw.id,
+            gw.name,
+            gw.phone,
+            gw.photo_key,
+
+            COALESCE(SUM(pe.quantity), 0) AS completed_quantity
+
+        FROM style_operations so
+
+        LEFT JOIN production_entries pe
+            ON pe.style_operation_id = so.id
+            AND pe.bundle_id = $1
+            AND pe.organization_id = $2
+
+        LEFT JOIN garment_workers gw
+            ON gw.id = pe.worker_id
+            AND gw.organization_id = $2
+
+        WHERE so.style_id = $3
+            AND so.organization_id = $2
+
+        GROUP BY
+            so.id,
+            so.name,
+            so.rate_per_piece,
+            so.created_at,
+            gw.id,
+            gw.name,
+            gw.phone,
+            gw.photo_key
+
+        ORDER BY so.created_at ASC
+    `
+
+	rows, err := r.db.QueryContext(
+		ctx,
+		query,
+		bundleID,
+		organizationID,
+		bundle.StyleID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	operationIndex := make(map[string]int)
+
+	for rows.Next() {
+		var (
+			operationID   string
+			operationName string
+			rate          int64
+
+			workerID    sql.NullString
+			workerName  sql.NullString
+			workerPhone sql.NullString
+			photoKey    sql.NullString
+
+			completedQuantity int
+		)
+
+		if err := rows.Scan(
+			&operationID,
+			&operationName,
+			&rate,
+			&workerID,
+			&workerName,
+			&workerPhone,
+			&photoKey,
+			&completedQuantity,
+		); err != nil {
+			return nil, err
+		}
+
+		operation := output.BundleOperationProgress{
+			ID:                operationID,
+			Name:              operationName,
+			RatePerPiece:      rate,
+			CompletedQuantity: completedQuantity,
+			PendingQuantity:   bundle.Quantity - completedQuantity,
+		}
+
+		if workerID.Valid {
+			operation.Worker = &output.SlimWorker{
+				ID:       workerID.String,
+				Name:     workerName.String,
+				Phone:    workerPhone.String,
+				PhotoKey: photoKey.String,
+			}
+		}
+
+		// One operation should have one worker.
+		if _, exists := operationIndex[operationID]; exists {
+			return nil, fmt.Errorf(
+				"multiple workers found for operation %s in bundle %s",
+				operationID,
+				bundleID,
+			)
+		}
+
+		operationIndex[operationID] = len(detail.Operations)
+		detail.Operations = append(detail.Operations, operation)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return detail, nil
 }
 
 // LIST

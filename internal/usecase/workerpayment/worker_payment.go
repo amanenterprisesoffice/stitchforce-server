@@ -18,6 +18,10 @@ import (
 	appUtils "stitchforce-server/pkg/utils"
 )
 
+const (
+	MaxPaginationLimit = 600
+)
+
 type UseCase struct {
 	repository       repo.WorkerPaymentRepository
 	workerRepository repo.GarmentWorkerRepository
@@ -25,10 +29,6 @@ type UseCase struct {
 
 	logger *logger.Logger
 }
-
-const (
-	MaxPaginationLimit = 600
-)
 
 func New(
 	repository repo.WorkerPaymentRepository,
@@ -122,9 +122,9 @@ func (u *UseCase) Create(
 		UpdatedAt:      now,
 	}
 
-	filter := input.PayableEntriesFilter{
-		FromDate: data.FromDate,
-		ToDate:   data.ToDate,
+	filter := input.ProductionEntryFilter{
+		FromDate: &data.FromDate,
+		ToDate:   &data.ToDate,
 	}
 
 	u.logger.InfoContext(
@@ -304,55 +304,80 @@ func (u *UseCase) GetSummary(
 	return summary, nil
 }
 
-// GET PAYABLE PRODUCTION ENTRIES
-func (u *UseCase) GetPayableEntries(
+func (u *UseCase) ListWorkerBalances(
 	ctx context.Context,
 	organizationID string,
-	workerID string,
-	filter input.PayableEntriesFilter,
-) ([]*output.PayableProductionEntry, error) {
-	organizationID, err := utils.ValidateOrganizationID(organizationID)
-	if err != nil {
-		return nil, err
+	filter input.WorkerPaymentBalanceFilter,
+) ([]*output.WorkerPaymentBalance, error) {
+
+	organizationID = strings.TrimSpace(organizationID)
+
+	if organizationID == "" {
+		return nil, errors.New("organization ID is required")
 	}
 
-	workerID = strings.TrimSpace(workerID)
-	if workerID == "" {
-		return nil, errors.New("worker ID is required")
+	filter.Search = strings.TrimSpace(filter.Search)
+
+	if filter.Limit <= 0 {
+		filter.Limit = 20
 	}
 
-	if filter.FromDate.IsZero() || filter.ToDate.IsZero() {
-		return nil, errors.New("date range is required")
+	if filter.Limit > MaxPaginationLimit {
+		filter.Limit = MaxPaginationLimit
 	}
 
-	if filter.ToDate.Before(filter.FromDate) {
-		return nil, errors.New("to date cannot be before from date")
+	if filter.Offset < 0 {
+		filter.Offset = 0
 	}
 
-	worker, err := u.workerRepository.GetByID(
+	balances, err := u.repository.ListWorkerBalances(
 		ctx,
 		organizationID,
-		workerID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("get payment worker: %w", err)
-	}
-
-	if worker == nil {
-		return nil, errors.New("garment worker not found")
-	}
-
-	entries, err := u.repository.ListPayableEntries(
-		ctx,
-		organizationID,
-		workerID,
 		filter,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list payable production entries: %w", err)
+		u.logger.Error(
+			"failed to list worker payment balances",
+			"organization_id", organizationID,
+			"error", err,
+		)
+
+		return nil, fmt.Errorf(
+			"list worker payment balances: %w",
+			err,
+		)
 	}
 
-	return entries, nil
+	if balances == nil {
+		balances = make([]*output.WorkerPaymentBalance, 0)
+	}
+
+	// for each worker put singed url
+	for _, entry := range balances {
+		if strings.TrimSpace(entry.Worker.PhotoKey) == "" {
+			continue
+		}
+
+		photoURL, err := u.storage.SignedURL(
+			ctx,
+			entry.Worker.PhotoKey,
+			15*time.Minute,
+		)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"generate worker photo URL for %s: %w",
+				entry.Worker.ID,
+				err,
+			)
+		}
+
+		entry.Worker.PhotoURL = photoURL
+
+		// Never expose the storage key.
+		entry.Worker.PhotoKey = ""
+	}
+
+	return balances, nil
 }
 
 // VOID PAYMENT

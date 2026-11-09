@@ -6,8 +6,8 @@ type ProductionEntry struct {
 	ID             string `json:"id" db:"id"`
 	OrganizationID string `json:"organization_id" db:"organization_id"`
 
-	BundleID        string `json:"bundle_id" db:"bundle_id"`
-	WorkerID        string `json:"worker_id" db:"worker_id"`
+	BundleID         string `json:"bundle_id" db:"bundle_id"`
+	WorkerID         string `json:"worker_id" db:"worker_id"`
 	StyleOperationID string `json:"style_operation_id" db:"style_operation_id"`
 
 	Quantity     int   `json:"quantity" db:"quantity"`
@@ -19,4 +19,26 @@ type ProductionEntry struct {
 	CreatedAt time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at" db:"updated_at"`
 	DeletedAt *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
+}
+
+type ProductionEntryPaymentStatus string
+
+const (
+	// payable includes pending and partially_paid.
+	ProductionEntryPaymentStatusPayable       ProductionEntryPaymentStatus = "payable"
+	ProductionEntryPaymentStatusPending       ProductionEntryPaymentStatus = "pending"
+	ProductionEntryPaymentStatusPartiallyPaid ProductionEntryPaymentStatus = "partially_paid"
+	ProductionEntryPaymentStatusPaid          ProductionEntryPaymentStatus = "paid"
+)
+
+func (s ProductionEntryPaymentStatus) IsValid() bool {
+	switch s {
+	case
+		ProductionEntryPaymentStatusPayable,
+		ProductionEntryPaymentStatusPending,
+		ProductionEntryPaymentStatusPartiallyPaid,
+		ProductionEntryPaymentStatusPaid:
+		return true
+	}
+	return false
 }

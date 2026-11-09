@@ -35,3 +35,13 @@ const (
 	BundleStatusInProgress BundleStatus = "in_progress"
 	BundleStatusCompleted  BundleStatus = "completed"
 )
+
+func (s BundleStatus) IsValid() bool {
+	switch s {
+	case BundleStatusCreated, BundleStatusReady, BundleStatusInProgress, BundleStatusCompleted:
+		return true
+	default:
+		return false
+	}
+}
+

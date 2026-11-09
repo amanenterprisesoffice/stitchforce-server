@@ -125,6 +125,7 @@ func (h *ProductionEntryHandler) List(c *gin.Context) {
 		BundleID         = "bundle_id"
 		WorkerID         = "worker_id"
 		StyleID          = "style_id"
+		Status           = "status"
 		StyleOperationID = "style_operation_id"
 		Limit            = "limit"
 		Offset           = "offset"
@@ -138,6 +139,7 @@ func (h *ProductionEntryHandler) List(c *gin.Context) {
 		WorkerID:         c.Query(WorkerID),
 		StyleID:          c.Query(StyleID),
 		StyleOperationID: c.Query(StyleOperationID),
+		PaymentStatus:    entity.ProductionEntryPaymentStatus(strings.TrimSpace(c.Query(Status))),
 		Limit:            20,
 		Offset:           0,
 	}

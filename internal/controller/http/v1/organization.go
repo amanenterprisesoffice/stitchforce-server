@@ -1,14 +1,17 @@
 package v1
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/usecase"
+	"stitchforce-server/internal/usecase/input"
 )
 
 type OrganizationHandler struct {
@@ -160,7 +163,7 @@ func (h *OrganizationHandler) Delete(c *gin.Context) {
 }
 
 // DASHBOARD
-func (h *OrganizationHandler) GetDashboard(c *gin.Context) {
+func (h *OrganizationHandler) GetDashboardOverview(c *gin.Context) {
 	organizationID := c.Param("organizationID")
 
 	if organizationID == "" {
@@ -170,9 +173,77 @@ func (h *OrganizationHandler) GetDashboard(c *gin.Context) {
 		return
 	}
 
-	dashboard, err := h.organizations.GetDashboard(
+	dashboard, err := h.organizations.GetDashboardOverview(
 		c.Request.Context(),
 		organizationID,
+	)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dashboard)
+}
+func (h *OrganizationHandler) GetDashboardTrend(c *gin.Context) {
+	organizationID := c.Param("organizationID")
+
+	if organizationID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "organization id is required",
+		})
+		return
+	}
+
+	const (
+		ToDate   = "to_date"
+		FromDate = "from_date"
+		GroupBy  = "group_by"
+	)
+
+	fromDateValue := c.Query(FromDate)
+	toDateValue := c.Query(ToDate)
+	groupBy := input.DashboardGroup(c.DefaultQuery(GroupBy, input.DashboardGroupDaily))
+
+	if fromDateValue == "" || toDateValue == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "from_date and to_date are required",
+		})
+		return
+	}
+
+	fromDate, err := time.Parse(DateLayout, fromDateValue)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("from_date must be in %s format", DateLayout),
+		})
+		return
+	}
+
+	toDate, err := time.Parse(DateLayout, toDateValue)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("to_date must be in %s format", DateLayout),
+		})
+		return
+	}
+
+	if toDate.Before(fromDate) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "to_date cannot be before from_date",
+		})
+		return
+	}
+
+	filter := input.DashboardFilter{
+		FromDate: fromDate,
+		ToDate:   toDate,
+		GroupBy:  groupBy,
+	}
+
+	dashboard, err := h.organizations.GetDashboardTrend(
+		c.Request.Context(),
+		organizationID,
+		filter,
 	)
 	if err != nil {
 		writeError(c, err)

@@ -345,61 +345,55 @@ func (h *WorkerPaymentHandler) GetSummary(c *gin.Context) {
 	c.JSON(http.StatusOK, summary)
 }
 
-// GET PAYABLE PRODUCTION ENTRIES
-
-func (h *WorkerPaymentHandler) GetPayableEntries(c *gin.Context) {
+func (h *WorkerPaymentHandler) ListWorkerBalances(c *gin.Context) {
 	organizationID := c.Param("organizationID")
-	workerID := c.Param("id")
 
-	if organizationID == "" || workerID == "" {
+	if organizationID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "organization id and worker id are required",
+			"error": "organization id is required",
 		})
 		return
 	}
 
-	fromDateValue := c.Query("from_date")
-	toDateValue := c.Query("to_date")
+	const (
+		Search = "search"
+		Limit  = "limit"
+		Offset = "offset"
+	)
 
-	if fromDateValue == "" || toDateValue == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "from_date and to_date are required",
-		})
-		return
+	limit := 10
+	if value := c.Query(Limit); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "limit must be a positive integer",
+			})
+			return
+		}
+		limit = parsed
 	}
 
-	fromDate, err := time.Parse(DateLayout, fromDateValue)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("from_date must be in %s format", DateLayout),
-		})
-		return
+	offset := 0
+	if value := c.Query(Offset); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "offset must be a non-negative integer",
+			})
+			return
+		}
+		offset = parsed
 	}
 
-	toDate, err := time.Parse(DateLayout, toDateValue)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("to_date must be in %s format", DateLayout),
-		})
-		return
+	filter := input.WorkerPaymentBalanceFilter{
+		Search: c.Query(Search),
+		Limit:  limit,
+		Offset: offset,
 	}
 
-	if toDate.Before(fromDate) {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "to_date cannot be before from_date",
-		})
-		return
-	}
-
-	filter := input.PayableEntriesFilter{
-		FromDate: fromDate,
-		ToDate:   toDate,
-	}
-
-	entries, err := h.payments.GetPayableEntries(
+	balances, err := h.payments.ListWorkerBalances(
 		c.Request.Context(),
 		organizationID,
-		workerID,
 		filter,
 	)
 	if err != nil {
@@ -407,7 +401,7 @@ func (h *WorkerPaymentHandler) GetPayableEntries(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, entries)
+	c.JSON(http.StatusOK, balances)
 }
 
 // VOID PAYMENT

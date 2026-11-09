@@ -13,25 +13,21 @@ type ProductionEntry struct {
 	RatePerPiece int64 `json:"rate_per_piece"`
 	TotalAmount  int64 `json:"total_amount"`
 
+	// Payment information
+	PaidAmount    int64  `json:"paid_amount"`
+	PendingAmount int64  `json:"pending_amount"`
+	PaymentStatus string `json:"payment_status"`
+
 	ProductionDate time.Time `json:"production_date"`
 	Remarks        string    `json:"remarks"`
 
-	Worker    ProductionEntryWorker    `json:"worker"`
-	Bundle    ProductionEntryBundle    `json:"bundle"`
-	Style     ProductionEntryStyle     `json:"style"`
-	Operation ProductionEntryOperation `json:"operation"`
+	Worker    SlimWorker                 `json:"worker"`
+	Bundle    ProductionEntryBundle      `json:"bundle"`
+	Style     ProductionEntryStyle       `json:"style"`
+	Operation ProductionEntryOperation  `json:"operation"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
-}
-
-type ProductionEntryWorker struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Phone    string `json:"phone"`
-	PhotoKey string `json:"-" db:"photo_key"`
-
-	PhotoURL string `json:"photo_url,omitempty"`
 }
 
 type ProductionEntryBundle struct {

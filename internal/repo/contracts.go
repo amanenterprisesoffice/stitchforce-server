@@ -17,9 +17,14 @@ type OrganizationRepository interface {
 	List(context.Context) ([]*entity.Organization, error)
 	Update(context.Context, *entity.Organization) error
 	Delete(context.Context, string) error
-	GetDashboard(
-		context.Context,
-		string, // organizationID
+	GetDashboardOverview(
+		ctx context.Context,
+		organizationID string,
+	) (*output.DashboardOverview, error)
+	GetDashboardTrend(
+		ctx context.Context,
+		organizationID string,
+		filter input.DashboardFilter,
 	) (*output.OrganizationDashboard, error)
 }
 
@@ -106,9 +111,9 @@ type BundleRepository interface {
 
 	GetByID(
 		context.Context,
-		string, // organizationID
-		string, // bundleID
-	) (*entity.Bundle, error)
+		string,
+		string,
+	) (*output.BundleDetail, error)
 
 	List(
 		context.Context,
@@ -199,7 +204,7 @@ type WorkerPaymentRepository interface {
 		context.Context,
 		string, // organizationID
 		*entity.WorkerPayment,
-		input.PayableEntriesFilter,
+		input.ProductionEntryFilter,
 	) error
 
 	GetByID(
@@ -220,12 +225,11 @@ type WorkerPaymentRepository interface {
 		input.WorkerPaymentSummaryFilter, // workerID
 	) (*output.WorkerPaymentSummary, error)
 
-	ListPayableEntries(
-		context.Context,
-		string, // organizationID
-		string, // workerID
-		input.PayableEntriesFilter,
-	) ([]*output.PayableProductionEntry, error)
+	ListWorkerBalances(
+		ctx context.Context,
+		organizationID string,
+		filter input.WorkerPaymentBalanceFilter,
+	) ([]*output.WorkerPaymentBalance, error)
 
 	Void(
 		context.Context,

@@ -76,7 +76,8 @@ func NewRouter(
 				organizations.PUT("", organizationHandler.Update)
 				organizations.DELETE("", organizationHandler.Delete)
 
-				organizations.GET("/dashboard", organizationHandler.GetDashboard)
+				organizations.GET("/dashboard", organizationHandler.GetDashboardOverview)
+				organizations.GET("/dashboard-trend", organizationHandler.GetDashboardTrend)
 
 				styles := organizations.Group("/styles")
 				{
@@ -123,11 +124,11 @@ func NewRouter(
 					workers.PATCH("/:id/status", garmentWorkerHandler.SetStatus)
 					workers.DELETE("/:id", garmentWorkerHandler.Delete)
 					workers.GET("/:id/payment-summary", workerPaymentHandler.GetWorkerSummary)
-					workers.GET("/:id/payable-entries", workerPaymentHandler.GetPayableEntries)
 				}
 
 				workerPayments := organizations.Group("/worker-payments")
 				{
+					workerPayments.GET("/balances", workerPaymentHandler.ListWorkerBalances)
 					workerPayments.POST("", workerPaymentHandler.Create)
 					workerPayments.GET("/summary", workerPaymentHandler.GetSummary)
 					workerPayments.GET("", workerPaymentHandler.List)

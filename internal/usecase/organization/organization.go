@@ -9,6 +9,7 @@ import (
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/repo"
 	"stitchforce-server/internal/usecase"
+	"stitchforce-server/internal/usecase/input"
 	"stitchforce-server/internal/usecase/output"
 	"stitchforce-server/internal/usecase/utils"
 	ucutils "stitchforce-server/internal/usecase/utils"
@@ -117,18 +118,42 @@ func (u *UseCase) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (u *UseCase) GetDashboard(
+func (u *UseCase) GetDashboardOverview(
 	ctx context.Context,
 	organizationID string,
+) (*output.DashboardOverview, error) {
+	organizationID, err := utils.ValidateOrganizationID(organizationID)
+	if err != nil {
+		return nil, err
+	}
+
+	dashboard, err := u.repository.GetDashboardOverview(
+		ctx,
+		organizationID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"get organization dashboard: %w",
+			err,
+		)
+	}
+
+	return dashboard, nil
+}
+func (u *UseCase) GetDashboardTrend(
+	ctx context.Context,
+	organizationID string,
+	filter input.DashboardFilter,
 ) (*output.OrganizationDashboard, error) {
 	organizationID, err := utils.ValidateOrganizationID(organizationID)
 	if err != nil {
 		return nil, err
 	}
 
-	dashboard, err := u.repository.GetDashboard(
+	dashboard, err := u.repository.GetDashboardTrend(
 		ctx,
 		organizationID,
+		filter,
 	)
 	if err != nil {
 		return nil, fmt.Errorf(

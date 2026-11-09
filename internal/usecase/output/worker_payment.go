@@ -20,7 +20,7 @@ type WorkerPayment struct {
 	CreatedAt       time.Time             `json:"created_at" db:"created_at"`
 	UpdatedAt       time.Time             `json:"updated_at" db:"updated_at"`
 	ProductionEntry []PaidProductionEntry `json:"production_entry" db:"production_entry"`
-	Worker          ProductionEntryWorker `json:"worker" db:"worker"`
+	Worker          SlimWorker `json:"worker" db:"worker"`
 }
 
 type PaidProductionEntry struct {
@@ -28,24 +28,20 @@ type PaidProductionEntry struct {
 	AllocatedAmount int64 `json:"allocated_amount"`
 }
 
-type PayableProductionEntry struct {
-	ProductionEntryID string                   `json:"production_entry_id"`
-	WorkerId          string                   `json:"worker_id"`
-	Bundle            ProductionEntryBundle    `json:"bundle"`
-	Style             ProductionEntryStyle     `json:"style"`
-	Operation         ProductionEntryOperation `json:"operation"`
-
-	ProductionDate time.Time `json:"production_date"`
-
-	Quantity      int   `json:"quantity"`
-	RatePerPiece  int64 `json:"rate_per_piece"`
-	TotalAmount   int64 `json:"total_amount"`
-	PaidAmount    int64 `json:"paid_amount"`
-	PendingAmount int64 `json:"pending_amount"`
-}
 
 type WorkerPaymentSummary struct {
 	TotalEarned  int64 `json:"total_earned"`
 	TotalPaid    int64 `json:"total_paid"`
 	TotalPending int64 `json:"total_pending"`
+}
+
+type WorkerPaymentBalance struct {
+	Worker   SlimWorker `json:"worker"`
+	PhotoURL string     `json:"photo_url,omitempty"`
+
+	TotalEarned  int64 `json:"total_earned"`
+	TotalPaid    int64 `json:"total_paid"`
+	TotalPending int64 `json:"total_pending"`
+
+	PendingEntries int `json:"pending_entries"`
 }

@@ -14,9 +14,14 @@ type OrganizationUseCase interface {
 	List(context.Context) ([]*entity.Organization, error)
 	Update(context.Context, *entity.Organization) error
 	Delete(context.Context, string) error
-	GetDashboard(
+	GetDashboardOverview(
 		context.Context,
 		string, // organizationID
+	) (*output.DashboardOverview, error)
+	GetDashboardTrend(
+		context.Context,
+		string, // organizationID
+		input.DashboardFilter,
 	) (*output.OrganizationDashboard, error)
 }
 
@@ -141,7 +146,7 @@ type BundleUseCase interface {
 		context.Context,
 		string, // organizationID
 		string, // bundleID
-	) (*entity.Bundle, error)
+	) (*output.BundleDetail, error)
 
 	List(
 		context.Context,
@@ -255,12 +260,11 @@ type WorkerPaymentUseCase interface {
 		input.WorkerPaymentSummaryFilter,
 	) (*output.WorkerPaymentSummary, error)
 
-	GetPayableEntries(
+	ListWorkerBalances(
 		context.Context,
 		string, // organizationID
-		string, // workerID
-		input.PayableEntriesFilter,
-	) ([]*output.PayableProductionEntry, error)
+		input.WorkerPaymentBalanceFilter,
+	) ([]*output.WorkerPaymentBalance, error)
 
 	Void(
 		context.Context,

@@ -4,12 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/repo"
+	"stitchforce-server/internal/storage"
 	"stitchforce-server/internal/usecase"
 	"stitchforce-server/internal/usecase/input"
+	"stitchforce-server/internal/usecase/output"
 	ucutils "stitchforce-server/internal/usecase/utils"
 	"stitchforce-server/pkg/logger"
 	"stitchforce-server/pkg/utils"
@@ -21,16 +25,19 @@ const (
 
 type UseCase struct {
 	repository repo.BundleRepository
-	logger     *logger.Logger
+	storage    storage.Storage
+	logger *logger.Logger
 }
 
 func New(
 	repository repo.BundleRepository,
+	storage storage.Storage,
 	logger *logger.Logger,
 ) usecase.BundleUseCase {
 	return &UseCase{
 		repository: repository,
 		logger:     logger,
+		storage:    storage,
 	}
 }
 
@@ -84,24 +91,47 @@ func (u *UseCase) GetByID(
 	ctx context.Context,
 	organizationID string,
 	bundleID string,
-) (*entity.Bundle, error) {
-	var err error
+) (*output.BundleDetail, error) {
 
-	organizationID, err = ucutils.ValidateOrganizationID(organizationID)
+	organizationID, err := ucutils.ValidateOrganizationID(organizationID)
 	if err != nil {
 		return nil, err
 	}
 
-	bundleID, err = ucutils.ValidateBundleID(bundleID)
-	if err != nil {
-		return nil, err
-	}
-
-	return u.repository.GetByID(
+	detail, err := u.repository.GetByID(
 		ctx,
 		organizationID,
 		bundleID,
 	)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range detail.Operations {
+		worker := detail.Operations[i].Worker
+
+		if worker == nil || strings.TrimSpace(worker.PhotoKey) == "" {
+			continue
+		}
+
+		photoURL, err := u.storage.SignedURL(
+			ctx,
+			worker.PhotoKey,
+			15*time.Minute,
+		)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"generate worker photo URL for %s: %w",
+				worker.ID,
+				err,
+			)
+		}
+
+		worker.PhotoURL = photoURL
+		worker.PhotoKey = ""
+	}
+
+	return detail, nil
 }
 
 // LIST

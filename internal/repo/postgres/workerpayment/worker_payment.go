@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"stitchforce-server/internal/entity"
@@ -30,7 +31,7 @@ func (r *WorkerPaymentRepository) CreateWithAllocations(
 	ctx context.Context,
 	organizationID string,
 	payment *entity.WorkerPayment,
-	filter input.PayableEntriesFilter,
+	filter input.ProductionEntryFilter,
 ) error {
 	if payment == nil {
 		return errors.New("worker payment is required")
@@ -680,158 +681,144 @@ func (r *WorkerPaymentRepository) GetSummary(
 	return &summary, nil
 }
 
-// LIST PAYABLE PRODUCTION ENTRIES
 
-func (r *WorkerPaymentRepository) ListPayableEntries(
+// LIST WORKER PAYMENT BALANCES
+
+// LIST WORKER PAYMENT BALANCES
+
+func (r *WorkerPaymentRepository) ListWorkerBalances(
 	ctx context.Context,
 	organizationID string,
-	workerID string,
-	filter input.PayableEntriesFilter,
-) ([]*output.PayableProductionEntry, error) {
-	toDateExclusive := filter.ToDate.AddDate(0, 0, 1)
+	filter input.WorkerPaymentBalanceFilter,
+) ([]*output.WorkerPaymentBalance, error) {
 
 	query := `
 		WITH entry_balances AS (
 			SELECT
-				pe.id AS production_entry_id,
+				pe.id,
 				pe.worker_id,
-				pe.production_date,
-				pe.quantity,
-				pe.rate_per_piece,
 				pe.total_amount,
-
-				b.id AS bundle_id,
-				b.bundle_number,
-				b.quantity AS bundle_quantity,
-				b.status AS bundle_status,
-
-				s.id AS style_id,
-				s.name AS style_name,
-				s.style_number,
-
-				so.id AS operation_id,
-				so.name AS operation_name,
 
 				COALESCE(
 					(
 						SELECT SUM(wpa.amount)
 						FROM worker_payment_allocations wpa
+
 						INNER JOIN worker_payments wp
 							ON wp.id = wpa.worker_payment_id
 							AND wp.organization_id = wpa.organization_id
+
 						WHERE wpa.organization_id = pe.organization_id
 							AND wpa.production_entry_id = pe.id
-							AND wp.status = $5
+							AND wp.status = $2
 					),
 					0
 				) AS paid_amount
 
 			FROM production_entries pe
 
-			INNER JOIN bundles b
-				ON b.id = pe.bundle_id
-				AND b.organization_id = pe.organization_id
-
-			INNER JOIN styles s
-				ON s.id = b.style_id
-				AND s.organization_id = b.organization_id
-
-			INNER JOIN style_operations so
-				ON so.id = pe.style_operation_id
-				AND so.organization_id = pe.organization_id
-
 			WHERE pe.organization_id = $1
-				AND pe.worker_id = $2
 				AND pe.deleted_at IS NULL
-				AND b.deleted_at IS NULL
-				AND pe.production_date >= $3
-				AND pe.production_date < $4
 		)
 
 		SELECT
-			production_entry_id,
-			worker_id,
+			gw.id,
+			gw.name,
+			COALESCE(gw.phone, ''),
+			COALESCE(gw.photo_key, ''),
 
-			bundle_id,
-			bundle_number,
-			bundle_quantity,
-			bundle_status,
+			COALESCE(SUM(eb.total_amount), 0) AS total_earned,
+			COALESCE(SUM(eb.paid_amount), 0) AS total_paid,
 
-			style_id,
-			style_name,
-			style_number,
+			COALESCE(
+				SUM(eb.total_amount - eb.paid_amount),
+				0
+			) AS total_pending,
 
-			operation_id,
-			operation_name,
+			COUNT(*) FILTER (
+				WHERE eb.total_amount - eb.paid_amount > 0
+			) AS pending_entries
 
-			production_date,
-			quantity,
-			rate_per_piece,
-			total_amount,
-			paid_amount,
-			total_amount - paid_amount AS pending_amount
+		FROM entry_balances eb
 
-		FROM entry_balances
-		WHERE total_amount - paid_amount > 0
-		ORDER BY production_date, production_entry_id
+		INNER JOIN garment_workers gw
+			ON gw.id = eb.worker_id
+			AND gw.organization_id = $1
+			AND gw.deleted_at IS NULL
+
+		WHERE (
+			$3 = ''
+			OR gw.name ILIKE '%' || $3 || '%'
+			OR gw.phone ILIKE '%' || $3 || '%'
+			OR gw.id ILIKE '%' || $3 || '%'
+		)
+
+		GROUP BY
+			gw.id,
+			gw.name,
+			gw.phone,
+			gw.photo_key
+
+		HAVING SUM(eb.total_amount - eb.paid_amount) > 0
+
+		ORDER BY total_pending DESC, gw.name ASC
+
+		LIMIT $4 OFFSET $5
 	`
 
+	search := strings.TrimSpace(filter.Search)
+
+	limit := filter.Limit
+	offset := filter.Offset
 	rows, err := r.db.QueryContext(
 		ctx,
 		query,
 		organizationID,
-		workerID,
-		filter.FromDate,
-		toDateExclusive,
 		entity.PaymentStatusCompleted,
+		search,
+		limit,
+		offset,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list payable production entries: %w", err)
+		return nil, fmt.Errorf(
+			"list worker payment balances: %w",
+			err,
+		)
 	}
 	defer rows.Close()
 
-	entries := make([]*output.PayableProductionEntry, 0)
+	balances := make([]*output.WorkerPaymentBalance, 0)
 
 	for rows.Next() {
-		var entry output.PayableProductionEntry
+		balance := &output.WorkerPaymentBalance{}
 
 		if err := rows.Scan(
-			&entry.ProductionEntryID,
-			&entry.WorkerId,
-
-			&entry.Bundle.ID,
-			&entry.Bundle.BundleNumber,
-			&entry.Bundle.Quantity,
-			&entry.Bundle.Status,
-
-			&entry.Style.ID,
-			&entry.Style.Name,
-			&entry.Style.StyleNumber,
-
-			&entry.Operation.ID,
-			&entry.Operation.Name,
-
-			&entry.ProductionDate,
-			&entry.Quantity,
-			&entry.RatePerPiece,
-			&entry.TotalAmount,
-			&entry.PaidAmount,
-			&entry.PendingAmount,
+			&balance.Worker.ID,
+			&balance.Worker.Name,
+			&balance.Worker.Phone,
+			&balance.Worker.PhotoKey,
+			&balance.TotalEarned,
+			&balance.TotalPaid,
+			&balance.TotalPending,
+			&balance.PendingEntries,
 		); err != nil {
-			return nil, fmt.Errorf("scan payable production entry: %w", err)
+			return nil, fmt.Errorf(
+				"scan worker payment balance: %w",
+				err,
+			)
 		}
 
-		// The operation rate is the snapshot stored on the production entry.
-		entry.Operation.RatePerPiece = entry.RatePerPiece
-
-		entries = append(entries, &entry)
+		balances = append(balances, balance)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate payable production entries: %w", err)
+		return nil, fmt.Errorf(
+			"iterate worker payment balances: %w",
+			err,
+		)
 	}
 
-	return entries, nil
+	return balances, nil
 }
 
 // VOID PAYMENT
