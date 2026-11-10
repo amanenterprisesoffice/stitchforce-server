@@ -11,8 +11,22 @@ import (
 
 var ErrNotFound = errors.New("not found")
 
+type LicenseRepository interface {
+	Create(ctx context.Context, license *entity.License) error
+	Activate(
+		ctx context.Context,
+		licenseKeyHash string,
+		organizationID string,
+	) (*entity.License, error)
+}
+
 type OrganizationRepository interface {
 	Create(context.Context, *entity.Organization) error
+	GetByUserAndOrganization(
+		ctx context.Context,
+		userID string,
+		organizationID string,
+	) (*entity.Organization, error)
 	GetByID(context.Context, string) (*entity.Organization, error)
 	List(context.Context) ([]*entity.Organization, error)
 	Update(context.Context, *entity.Organization) error

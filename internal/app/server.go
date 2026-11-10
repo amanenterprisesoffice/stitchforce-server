@@ -28,6 +28,7 @@ func NewServer(
 		useCases.Users,
 		useCases.GarmentWorkers,
 		useCases.Organization,
+		useCases.License,
 		useCases.Style,
 		useCases.StyleOperations,
 		useCases.Size,

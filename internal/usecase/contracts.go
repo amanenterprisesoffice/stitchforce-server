@@ -8,12 +8,30 @@ import (
 	"stitchforce-server/internal/usecase/output"
 )
 
+type LicenseUseCase interface {
+	Generate(
+		ctx context.Context,
+		organizationID string,
+		durationDays int,
+	) (*entity.GeneratedLicense, error)
+	Activate(
+		ctx context.Context,
+		organizationID string,
+		licenseKey string,
+	) (*entity.License, error)
+}
+
 type OrganizationUseCase interface {
 	Create(context.Context, *entity.Organization) error
 	GetByID(context.Context, string) (*entity.Organization, error)
 	List(context.Context) ([]*entity.Organization, error)
 	Update(context.Context, *entity.Organization) error
 	Delete(context.Context, string) error
+	GetByUserAndOrganization(
+		ctx context.Context,
+		userID string,
+		organizationID string,
+	) (*entity.Organization, error)
 	GetDashboardOverview(
 		context.Context,
 		string, // organizationID

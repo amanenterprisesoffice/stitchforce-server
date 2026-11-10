@@ -446,6 +446,22 @@ CREATE INDEX idx_worker_payment_allocations_payment
     );
 
 
+
+CREATE TABLE licenses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    license_key_hash TEXT NOT NULL UNIQUE,
+    organization_id UUID NOT NULL REFERENCES organizations(id),
+
+    duration_days INT NOT NULL,
+
+    status VARCHAR(20) NOT NULL DEFAULT 'unused'
+        CHECK (status IN ('unused', 'activated', 'revoked')),
+
+    activated_at TIMESTAMPTZ,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 -- =========================================
 -- END OF SCHEMA
 -- =========================================

@@ -44,6 +44,56 @@ func (r *Repository) Create(
 	)
 }
 
+func (r *Repository) GetByUserAndOrganization(
+	ctx context.Context,
+	userID string,
+	organizationID string,
+) (*entity.Organization, error) {
+
+	var (
+		org       entity.Organization
+		expiresAt sql.NullTime
+	)
+
+	query := `
+		SELECT
+			o.id,
+			o.name,
+			o.license_status,
+			o.license_expires_at,
+			o.created_at,
+			o.updated_at
+		FROM organizations o
+		INNER JOIN users u ON u.organization_id = o.id
+		WHERE u.id = $1
+		  AND o.id = $2
+	`
+
+	err := r.db.QueryRowContext(
+		ctx,
+		query,
+		userID,
+		organizationID,
+	).Scan(
+		&org.ID,
+		&org.Name,
+		&org.LicenseStatus,
+		&expiresAt,
+		&org.CreatedAt,
+		&org.UpdatedAt,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if expiresAt.Valid {
+		org.LicenseExpiresAt = &expiresAt.Time
+	}
+
+	return &org, nil
+}
+
 func scanOrganization(
 	row interface {
 		Scan(...any) error

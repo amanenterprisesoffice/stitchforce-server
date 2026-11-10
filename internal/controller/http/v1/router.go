@@ -14,6 +14,7 @@ func NewRouter(
 	users usecase.UserUseCase,
 	garmentWorkers usecase.GarmentWorkerUseCase,
 	organizationUseCase usecase.OrganizationUseCase,
+	licenseUseCase usecase.LicenseUseCase,
 	styleUseCase usecase.StyleUseCase,
 	styleOperationUseCase usecase.StyleOperationUseCase,
 	sizeUseCase usecase.SizeUseCase,
@@ -49,7 +50,7 @@ func NewRouter(
 	garmentWorkerHandler := NewGarmentWorkerHandler(garmentWorkers, validate)
 	productionEntryHandler := NewProductionEntryHandler(productionEntryUseCase, validate)
 	workerPaymentHandler := NewWorkerPaymentHandler(workerPaymentUseCase, validate)
-
+	licenseHandler := NewLicenseHandler(licenseUseCase, validate)
 	v1 := r.Group("/v1")
 	{
 		auth := v1.Group("/auth")
@@ -72,79 +73,91 @@ func NewRouter(
 			}
 			organizations := protected.Group("/organizations/:organizationID")
 			{
+				// License activation: membership required, license can be expired.
+				organizations.POST(
+					"/license/activate",
+					middleware.OrganizationAccess(organizationUseCase, false),
+					licenseHandler.Activate,
+				)
 				organizations.GET("", organizationHandler.GetByID)
-				organizations.PUT("", organizationHandler.Update)
-				organizations.DELETE("", organizationHandler.Delete)
 
-				organizations.GET("/dashboard", organizationHandler.GetDashboardOverview)
-				organizations.GET("/dashboard-trend", organizationHandler.GetDashboardTrend)
-
-				styles := organizations.Group("/styles")
+				// All normal organization routes require an active license & membership.
+				licensed := organizations.Group("")
+				licensed.Use(middleware.OrganizationAccess(organizationUseCase, true))
 				{
-					styles.POST("", styleHandler.Create)
-					styles.GET("", styleHandler.List)
-					styles.GET("/:styleID", styleHandler.Get)
-					styles.PUT("/:styleID", styleHandler.Update)
-					styles.DELETE("/:styleID", styleHandler.Delete)
+					licensed.PUT("", organizationHandler.Update)
+					licensed.DELETE("", organizationHandler.Delete)
 
-					operations := styles.Group("/:styleID/operations")
+					licensed.GET("/dashboard", organizationHandler.GetDashboardOverview)
+					licensed.GET("/dashboard-trend", organizationHandler.GetDashboardTrend)
+
+					styles := licensed.Group("/styles")
 					{
-						operations.POST("", styleOperationHandler.Create)
-						operations.GET("", styleOperationHandler.List)
-						operations.GET("/:id", styleOperationHandler.Get)
-						operations.PUT("/:id", styleOperationHandler.Update)
-						operations.DELETE("/:id", styleOperationHandler.Delete)
+						styles.POST("", styleHandler.Create)
+						styles.GET("", styleHandler.List)
+						styles.GET("/:styleID", styleHandler.Get)
+						styles.PUT("/:styleID", styleHandler.Update)
+						styles.DELETE("/:styleID", styleHandler.Delete)
+
+						operations := styles.Group("/:styleID/operations")
+						{
+							operations.POST("", styleOperationHandler.Create)
+							operations.GET("", styleOperationHandler.List)
+							operations.GET("/:id", styleOperationHandler.Get)
+							operations.PUT("/:id", styleOperationHandler.Update)
+							operations.DELETE("/:id", styleOperationHandler.Delete)
+						}
 					}
-				}
 
-				sizes := organizations.Group("/sizes")
-				{
-					sizes.POST("", sizeHandler.Create)
-					sizes.GET("", sizeHandler.List)
-					sizes.GET("/:id", sizeHandler.Get)
-					sizes.PUT("/:id", sizeHandler.Update)
-					sizes.DELETE("/:id", sizeHandler.Delete)
-				}
+					sizes := licensed.Group("/sizes")
+					{
+						sizes.POST("", sizeHandler.Create)
+						sizes.GET("", sizeHandler.List)
+						sizes.GET("/:id", sizeHandler.Get)
+						sizes.PUT("/:id", sizeHandler.Update)
+						sizes.DELETE("/:id", sizeHandler.Delete)
+					}
 
-				bundles := organizations.Group("/bundles")
-				{
-					bundles.POST("", bundleHandler.Create)
-					bundles.GET("", bundleHandler.List)
-					bundles.GET("/:id", bundleHandler.Get)
-					bundles.PUT("/:id", bundleHandler.Update)
-					bundles.DELETE("/:id", bundleHandler.Delete)
-				}
+					bundles := licensed.Group("/bundles")
+					{
+						bundles.POST("", bundleHandler.Create)
+						bundles.GET("", bundleHandler.List)
+						bundles.GET("/:id", bundleHandler.Get)
+						bundles.PUT("/:id", bundleHandler.Update)
+						bundles.DELETE("/:id", bundleHandler.Delete)
+					}
 
-				workers := organizations.Group("/garment-workers")
-				{
-					workers.POST("", garmentWorkerHandler.Create)
-					workers.GET("", garmentWorkerHandler.List)
-					workers.GET("/:id", garmentWorkerHandler.Get)
-					workers.PUT("/:id", garmentWorkerHandler.Update)
-					workers.PATCH("/:id/status", garmentWorkerHandler.SetStatus)
-					workers.DELETE("/:id", garmentWorkerHandler.Delete)
-					workers.GET("/:id/payment-summary", workerPaymentHandler.GetWorkerSummary)
-				}
+					workers := licensed.Group("/garment-workers")
+					{
+						workers.POST("", garmentWorkerHandler.Create)
+						workers.GET("", garmentWorkerHandler.List)
+						workers.GET("/:id", garmentWorkerHandler.Get)
+						workers.PUT("/:id", garmentWorkerHandler.Update)
+						workers.PATCH("/:id/status", garmentWorkerHandler.SetStatus)
+						workers.DELETE("/:id", garmentWorkerHandler.Delete)
+						workers.GET("/:id/payment-summary", workerPaymentHandler.GetWorkerSummary)
+					}
 
-				workerPayments := organizations.Group("/worker-payments")
-				{
-					workerPayments.GET("/balances", workerPaymentHandler.ListWorkerBalances)
-					workerPayments.POST("", workerPaymentHandler.Create)
-					workerPayments.GET("/summary", workerPaymentHandler.GetSummary)
-					workerPayments.GET("", workerPaymentHandler.List)
-					workerPayments.GET("/export", workerPaymentHandler.Export)
-					workerPayments.GET("/:id", workerPaymentHandler.Get)
-					workerPayments.PATCH("/:id/void", workerPaymentHandler.Void)
-				}
+					workerPayments := licensed.Group("/worker-payments")
+					{
+						workerPayments.GET("/balances", workerPaymentHandler.ListWorkerBalances)
+						workerPayments.POST("", workerPaymentHandler.Create)
+						workerPayments.GET("/summary", workerPaymentHandler.GetSummary)
+						workerPayments.GET("", workerPaymentHandler.List)
+						workerPayments.GET("/export", workerPaymentHandler.Export)
+						workerPayments.GET("/:id", workerPaymentHandler.Get)
+						workerPayments.PATCH("/:id/void", workerPaymentHandler.Void)
+					}
 
-				productionEntries := organizations.Group("/production-entries")
-				{
-					productionEntries.GET("/export", productionEntryHandler.Export)
-					productionEntries.POST("", productionEntryHandler.Create)
-					productionEntries.GET("", productionEntryHandler.List)
-					productionEntries.GET("/:id", productionEntryHandler.Get)
-					productionEntries.PUT("/:id", productionEntryHandler.Update)
-					productionEntries.DELETE("/:id", productionEntryHandler.Delete)
+					productionEntries := licensed.Group("/production-entries")
+					{
+						productionEntries.GET("/export", productionEntryHandler.Export)
+						productionEntries.POST("", productionEntryHandler.Create)
+						productionEntries.GET("", productionEntryHandler.List)
+						productionEntries.GET("/:id", productionEntryHandler.Get)
+						productionEntries.PUT("/:id", productionEntryHandler.Update)
+						productionEntries.DELETE("/:id", productionEntryHandler.Delete)
+					}
 				}
 			}
 		}

@@ -2,9 +2,9 @@ package organization
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/repo"
@@ -25,14 +25,6 @@ func New(repository repo.OrganizationRepository, log *logger.Logger) usecase.Org
 	return &UseCase{repository: repository, logger: log}
 }
 
-func validateID(id string) (string, error) {
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return "", errors.New("organization ID is required")
-	}
-	return id, nil
-}
-
 func (u *UseCase) Create(ctx context.Context, org *entity.Organization) error {
 	if err := ucutils.ValidateOrganization(org); err != nil {
 		return err
@@ -49,10 +41,50 @@ func (u *UseCase) Create(ctx context.Context, org *entity.Organization) error {
 	return nil
 }
 
-func (u *UseCase) GetByID(ctx context.Context, id string) (*entity.Organization, error) {
-	id, err := validateID(id)
+func (u *UseCase) GetByUserAndOrganization(
+	ctx context.Context,
+	userID string,
+	organizationID string,
+) (*entity.Organization, error) {
+
+	ok := ucutils.ValidateID(userID)
+	if !ok {
+		return nil, errors.New("invalid user ID")
+	}
+
+	ok = ucutils.ValidateID(organizationID)
+	if !ok {
+		return nil, errors.New("invalid organization ID")
+	}
+
+	org, err := u.repository.GetByUserAndOrganization(
+		ctx,
+		userID,
+		organizationID,
+	)
+
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+
+		u.logger.ErrorContext(ctx,
+			"failed to verify organization access",
+			"user_id", userID,
+			"organization_id", organizationID,
+			"error", err,
+		)
+
 		return nil, err
+	}
+
+	return org, nil
+}
+
+func (u *UseCase) GetByID(ctx context.Context, id string) (*entity.Organization, error) {
+	ok := ucutils.ValidateID(id)
+	if !ok {
+		return nil, errors.New("invalid ID")
 	}
 
 	org, err := u.repository.GetByID(ctx, id)
@@ -79,32 +111,30 @@ func (u *UseCase) Update(ctx context.Context, org *entity.Organization) error {
 		return errors.New("organization is required")
 	}
 
-	id, err := validateID(org.ID)
-	if err != nil {
-		return err
+	ok := ucutils.ValidateID(org.ID)
+	if !ok {
+		return errors.New("invalid ID")
 	}
-
-	org.ID = id
 
 	if err := ucutils.ValidateOrganization(org); err != nil {
 		return err
 	}
 
-	u.logger.InfoContext(ctx, "updating organization", "id", id, "name", org.Name)
+	u.logger.InfoContext(ctx, "updating organization", "id", org.ID, "name", org.Name)
 
 	if err := u.repository.Update(ctx, org); err != nil {
-		u.logger.ErrorContext(ctx, "failed to update organization", "id", id, "error", err)
+		u.logger.ErrorContext(ctx, "failed to update organization", "id", org.ID, "error", err)
 		return err
 	}
 
-	u.logger.InfoContext(ctx, "organization updated", "id", id)
+	u.logger.InfoContext(ctx, "organization updated", "id", org.ID)
 	return nil
 }
 
 func (u *UseCase) Delete(ctx context.Context, id string) error {
-	id, err := validateID(id)
-	if err != nil {
-		return err
+	ok := ucutils.ValidateID(id)
+	if !ok {
+		return errors.New("invalid ID")
 	}
 
 	u.logger.InfoContext(ctx, "deleting organization", "id", id)

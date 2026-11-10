@@ -8,6 +8,14 @@ import (
 	"unicode/utf8"
 )
 
+func ValidateID(id string) bool {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return false
+	}
+	return true
+}
+
 func ValidateSizeID(id string) (string, error) {
 	id = strings.TrimSpace(id)
 
