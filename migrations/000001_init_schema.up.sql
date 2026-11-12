@@ -6,6 +6,15 @@ CREATE TABLE organizations (
     id TEXT PRIMARY KEY,
     name VARCHAR(200) NOT NULL,
 
+    address_line_1 VARCHAR(255) NOT NULL DEFAULT '',
+    address_line_2 VARCHAR(255) NOT NULL DEFAULT '',
+    city VARCHAR(100) NOT NULL DEFAULT '',
+    state VARCHAR(100) NOT NULL DEFAULT '',
+    postal_code VARCHAR(20) NOT NULL DEFAULT '',
+    country VARCHAR(100) NOT NULL DEFAULT '',
+
+    photo_key TEXT NOT NULL DEFAULT '',
+
     license_status VARCHAR(20) NOT NULL DEFAULT 'active'
         CHECK (license_status IN ('active', 'suspended', 'expired')),
 
@@ -14,7 +23,6 @@ CREATE TABLE organizations (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 
 -- =========================================
 -- 2. USERS
@@ -29,9 +37,14 @@ CREATE TABLE users (
     name VARCHAR(100) NOT NULL,
     email VARCHAR(255) NOT NULL,
     password_hash TEXT NOT NULL,
+    photo_key TEXT NOT NULL DEFAULT '',
 
     role VARCHAR(50) NOT NULL DEFAULT 'staff'
-        CHECK (role IN ('org_admin', 'staff')),
+        CHECK (role IN ('org_admin', 'admin', 'staff')),
+
+    email_verified_at TIMESTAMPTZ,
+    email_verification_token_hash TEXT,
+    email_verification_expires_at TIMESTAMPTZ,
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -462,6 +475,30 @@ CREATE TABLE licenses (
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+
+CREATE TABLE organization_invitations (
+    id TEXT PRIMARY KEY,
+
+    organization_id TEXT NOT NULL
+        REFERENCES organizations(id) ON DELETE CASCADE,
+
+    email VARCHAR(255) NOT NULL,
+    role VARCHAR(50) NOT NULL
+        CHECK (role IN ('org_admin', 'staff')),
+
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+
+    accepted_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    UNIQUE (organization_id, email)
+);
+
+CREATE INDEX idx_organization_invitations_token
+    ON organization_invitations(token_hash);
+    
 -- =========================================
 -- END OF SCHEMA
 -- =========================================

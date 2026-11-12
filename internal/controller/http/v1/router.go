@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"stitchforce-server/internal/authorization"
 	"stitchforce-server/internal/controller/http/middleware"
 	"stitchforce-server/internal/usecase"
 	"stitchforce-server/pkg/jwt"
@@ -58,6 +59,8 @@ func NewRouter(
 			auth.POST("/register", userHandler.Register)
 			auth.POST("/login", userHandler.Login)
 			auth.POST("/logout", userHandler.Logout)
+			auth.POST("/verify-email", userHandler.VerifyEmail)
+			auth.POST("/accept-invitation", organizationHandler.AcceptInvitation)
 		}
 
 		protected := v1.Group("")
@@ -66,11 +69,18 @@ func NewRouter(
 			usersRoute := protected.Group("/users")
 			{
 				usersRoute.GET("/me", userHandler.GetMe)
-				usersRoute.GET("", userHandler.List)
-				usersRoute.GET("/:id", userHandler.Get)
-				usersRoute.PUT("/:id", userHandler.Update)
-				usersRoute.DELETE("/:id", userHandler.Delete)
+				usersRoute.PATCH("/me", userHandler.Update)
+
+				usersRoute.GET("/:id",
+					middleware.RequirePermission(authorization.PermissionUsersView),
+					userHandler.Get,
+				)
+				usersRoute.DELETE("/:id",
+					middleware.RequirePermission(authorization.PermissionUsersManage),
+					userHandler.Delete,
+				)
 			}
+
 			organizations := protected.Group("/organizations/:organizationID")
 			{
 				// License activation: membership required, license can be expired.
@@ -79,84 +89,221 @@ func NewRouter(
 					middleware.OrganizationAccess(organizationUseCase, false),
 					licenseHandler.Activate,
 				)
-				organizations.GET("", organizationHandler.GetByID)
 
-				// All normal organization routes require an active license & membership.
+				organizations.GET("",
+					middleware.OrganizationAccess(organizationUseCase, false),
+					middleware.RequirePermission(authorization.PermissionOrganizationView),
+					organizationHandler.GetByID,
+				)
+
+				// All normal organization routes require an active license and membership.
 				licensed := organizations.Group("")
 				licensed.Use(middleware.OrganizationAccess(organizationUseCase, true))
 				{
-					licensed.PUT("", organizationHandler.Update)
-					licensed.DELETE("", organizationHandler.Delete)
+					// Organization
+					licensed.PUT("",
+						middleware.RequirePermission(authorization.PermissionOrganizationUpdate),
+						organizationHandler.Update,
+					)
 
-					licensed.GET("/dashboard", organizationHandler.GetDashboardOverview)
-					licensed.GET("/dashboard-trend", organizationHandler.GetDashboardTrend)
+					licensed.DELETE("",
+						middleware.RequirePermission(authorization.PermissionOrganizationUpdate),
+						organizationHandler.Delete,
+					)
 
+					// Users and invitations
+					licensed.GET("/users",
+						middleware.RequirePermission(authorization.PermissionUsersView),
+						userHandler.List,
+					)
+
+					licensed.POST("/invitations",
+						middleware.RequirePermission(authorization.PermissionUsersManage),
+						organizationHandler.Invite,
+					)
+					licensed.GET("/invitations",
+						middleware.RequirePermission(authorization.PermissionUsersView),
+						organizationHandler.ListInvitations,
+					)
+					licensed.POST("/invitations/:id/resend",
+						middleware.RequirePermission(authorization.PermissionUsersManage),
+						organizationHandler.ResendInvitation,
+					)
+					licensed.DELETE("/invitations/:id",
+						middleware.RequirePermission(authorization.PermissionUsersManage),
+						organizationHandler.CancelInvitation,
+					)
+
+					// Dashboard
+					licensed.GET("/dashboard",
+						middleware.RequirePermission(authorization.PermissionDashboardView),
+						organizationHandler.GetDashboardOverview,
+					)
+					licensed.GET("/dashboard-trend",
+						middleware.RequirePermission(authorization.PermissionDashboardView),
+						organizationHandler.GetDashboardTrend,
+					)
+
+					// Styles
 					styles := licensed.Group("/styles")
 					{
-						styles.POST("", styleHandler.Create)
-						styles.GET("", styleHandler.List)
-						styles.GET("/:styleID", styleHandler.Get)
-						styles.PUT("/:styleID", styleHandler.Update)
-						styles.DELETE("/:styleID", styleHandler.Delete)
+						view := styles.Group("")
+						view.Use(middleware.RequirePermission(authorization.PermissionStylesView))
+						{
+							view.GET("", styleHandler.List)
+							view.GET("/:styleID", styleHandler.Get)
+						}
 
+						create := styles.Group("")
+						create.Use(middleware.RequirePermission(authorization.PermissionStylesCreate))
+						create.POST("", styleHandler.Create)
+
+						update := styles.Group("")
+						update.Use(middleware.RequirePermission(authorization.PermissionStylesUpdate))
+						update.PUT("/:styleID", styleHandler.Update)
+
+						delete := styles.Group("")
+						delete.Use(middleware.RequirePermission(authorization.PermissionStylesDelete))
+						delete.DELETE("/:styleID", styleHandler.Delete)
+
+						// Style operations
 						operations := styles.Group("/:styleID/operations")
 						{
-							operations.POST("", styleOperationHandler.Create)
-							operations.GET("", styleOperationHandler.List)
-							operations.GET("/:id", styleOperationHandler.Get)
-							operations.PUT("/:id", styleOperationHandler.Update)
-							operations.DELETE("/:id", styleOperationHandler.Delete)
+							view := operations.Group("")
+							view.Use(middleware.RequirePermission(authorization.PermissionStylesView))
+							{
+								view.GET("", styleOperationHandler.List)
+								view.GET("/:id", styleOperationHandler.Get)
+							}
+
+							create := operations.Group("")
+							create.Use(middleware.RequirePermission(authorization.PermissionStylesCreate))
+							create.POST("", styleOperationHandler.Create)
+
+							update := operations.Group("")
+							update.Use(middleware.RequirePermission(authorization.PermissionStylesUpdate))
+							update.PUT("/:id", styleOperationHandler.Update)
+
+							delete := operations.Group("")
+							delete.Use(middleware.RequirePermission(authorization.PermissionStylesDelete))
+							delete.DELETE("/:id", styleOperationHandler.Delete)
 						}
 					}
 
+					// Sizes
 					sizes := licensed.Group("/sizes")
 					{
-						sizes.POST("", sizeHandler.Create)
-						sizes.GET("", sizeHandler.List)
-						sizes.GET("/:id", sizeHandler.Get)
-						sizes.PUT("/:id", sizeHandler.Update)
-						sizes.DELETE("/:id", sizeHandler.Delete)
+						view := sizes.Group("")
+						view.Use(middleware.RequirePermission(authorization.PermissionStylesView))
+						{
+							view.GET("", sizeHandler.List)
+							view.GET("/:id", sizeHandler.Get)
+						}
+
+						create := sizes.Group("")
+						create.Use(middleware.RequirePermission(authorization.PermissionStylesCreate))
+						create.POST("", sizeHandler.Create)
+
+						update := sizes.Group("")
+						update.Use(middleware.RequirePermission(authorization.PermissionStylesUpdate))
+						update.PUT("/:id", sizeHandler.Update)
+
+						delete := sizes.Group("")
+						delete.Use(middleware.RequirePermission(authorization.PermissionStylesDelete))
+						delete.DELETE("/:id", sizeHandler.Delete)
 					}
 
+					// Bundles
 					bundles := licensed.Group("/bundles")
 					{
-						bundles.POST("", bundleHandler.Create)
-						bundles.GET("", bundleHandler.List)
-						bundles.GET("/:id", bundleHandler.Get)
-						bundles.PUT("/:id", bundleHandler.Update)
-						bundles.DELETE("/:id", bundleHandler.Delete)
+						view := bundles.Group("")
+						view.Use(middleware.RequirePermission(authorization.PermissionBundlesView))
+						{
+							view.GET("", bundleHandler.List)
+							view.GET("/:id", bundleHandler.Get)
+						}
+
+						create := bundles.Group("")
+						create.Use(middleware.RequirePermission(authorization.PermissionBundlesCreate))
+						create.POST("", bundleHandler.Create)
+
+						update := bundles.Group("")
+						update.Use(middleware.RequirePermission(authorization.PermissionBundlesUpdate))
+						update.PUT("/:id", bundleHandler.Update)
+
+						delete := bundles.Group("")
+						delete.Use(middleware.RequirePermission(authorization.PermissionBundlesDelete))
+						delete.DELETE("/:id", bundleHandler.Delete)
 					}
 
+					// Garment workers
 					workers := licensed.Group("/garment-workers")
 					{
-						workers.POST("", garmentWorkerHandler.Create)
-						workers.GET("", garmentWorkerHandler.List)
-						workers.GET("/:id", garmentWorkerHandler.Get)
-						workers.PUT("/:id", garmentWorkerHandler.Update)
-						workers.PATCH("/:id/status", garmentWorkerHandler.SetStatus)
-						workers.DELETE("/:id", garmentWorkerHandler.Delete)
-						workers.GET("/:id/payment-summary", workerPaymentHandler.GetWorkerSummary)
+						view := workers.Group("")
+						view.Use(middleware.RequirePermission(authorization.PermissionWorkersView))
+						{
+							view.GET("", garmentWorkerHandler.List)
+							view.GET("/:id", garmentWorkerHandler.Get)
+							view.GET("/:id/payment-summary", workerPaymentHandler.GetWorkerSummary)
+						}
+
+						create := workers.Group("")
+						create.Use(middleware.RequirePermission(authorization.PermissionWorkersCreate))
+						create.POST("", garmentWorkerHandler.Create)
+
+						update := workers.Group("")
+						update.Use(middleware.RequirePermission(authorization.PermissionWorkersUpdate))
+						update.PUT("/:id", garmentWorkerHandler.Update)
+
+						delete := workers.Group("")
+						delete.Use(middleware.RequirePermission(authorization.PermissionWorkersDelete))
+						delete.DELETE("/:id", garmentWorkerHandler.Delete)
 					}
 
+					// Worker payments
 					workerPayments := licensed.Group("/worker-payments")
 					{
-						workerPayments.GET("/balances", workerPaymentHandler.ListWorkerBalances)
-						workerPayments.POST("", workerPaymentHandler.Create)
-						workerPayments.GET("/summary", workerPaymentHandler.GetSummary)
-						workerPayments.GET("", workerPaymentHandler.List)
-						workerPayments.GET("/export", workerPaymentHandler.Export)
-						workerPayments.GET("/:id", workerPaymentHandler.Get)
-						workerPayments.PATCH("/:id/void", workerPaymentHandler.Void)
+						view := workerPayments.Group("")
+						view.Use(middleware.RequirePermission(authorization.PermissionProductionView))
+						{
+							view.GET("/balances", workerPaymentHandler.ListWorkerBalances)
+							view.GET("/summary", workerPaymentHandler.GetSummary)
+							view.GET("", workerPaymentHandler.List)
+							view.GET("/export", workerPaymentHandler.Export)
+							view.GET("/:id", workerPaymentHandler.Get)
+						}
+
+						create := workerPayments.Group("")
+						create.Use(middleware.RequirePermission(authorization.PermissionProductionCreate))
+						create.POST("", workerPaymentHandler.Create)
+
+						update := workerPayments.Group("")
+						update.Use(middleware.RequirePermission(authorization.PermissionProductionUpdate))
+						update.PATCH("/:id/void", workerPaymentHandler.Void)
 					}
 
+					// Production entries
 					productionEntries := licensed.Group("/production-entries")
 					{
-						productionEntries.GET("/export", productionEntryHandler.Export)
-						productionEntries.POST("", productionEntryHandler.Create)
-						productionEntries.GET("", productionEntryHandler.List)
-						productionEntries.GET("/:id", productionEntryHandler.Get)
-						productionEntries.PUT("/:id", productionEntryHandler.Update)
-						productionEntries.DELETE("/:id", productionEntryHandler.Delete)
+						view := productionEntries.Group("")
+						view.Use(middleware.RequirePermission(authorization.PermissionProductionView))
+						{
+							view.GET("/export", productionEntryHandler.Export)
+							view.GET("", productionEntryHandler.List)
+							view.GET("/:id", productionEntryHandler.Get)
+						}
+
+						create := productionEntries.Group("")
+						create.Use(middleware.RequirePermission(authorization.PermissionProductionCreate))
+						create.POST("", productionEntryHandler.Create)
+
+						update := productionEntries.Group("")
+						update.Use(middleware.RequirePermission(authorization.PermissionProductionUpdate))
+						update.PUT("/:id", productionEntryHandler.Update)
+
+						delete := productionEntries.Group("")
+						delete.Use(middleware.RequirePermission(authorization.PermissionProductionDelete))
+						delete.DELETE("/:id", productionEntryHandler.Delete)
 					}
 				}
 			}

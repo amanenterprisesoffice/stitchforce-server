@@ -23,15 +23,33 @@ type LicenseUseCase interface {
 
 type OrganizationUseCase interface {
 	Create(context.Context, *entity.Organization) error
-	GetByID(context.Context, string) (*entity.Organization, error)
-	List(context.Context) ([]*entity.Organization, error)
-	Update(context.Context, *entity.Organization) error
-	Delete(context.Context, string) error
+	GetByID(context.Context, string) (*output.Organization, error)
 	GetByUserAndOrganization(
 		ctx context.Context,
 		userID string,
 		organizationID string,
-	) (*entity.Organization, error)
+	) (*output.Organization, error)
+	List(context.Context) ([]*output.Organization, error)
+	Update(context.Context, string, *input.UpdateOrganizationInput) error
+	Delete(context.Context, string) error
+	Invite(
+		ctx context.Context,
+		organizationID string,
+		email string,
+		role entity.UserRole,
+	) error
+
+	AcceptInvitation(
+		ctx context.Context,
+		rawToken string,
+		name string,
+		password string,
+	) (*entity.User, error)
+
+	ListInvitations(ctx context.Context, organizationID string) ([]*entity.OrganizationInvitation, error)
+	ResendInvitation(ctx context.Context, organizationID, invitationID string) error
+	CancelInvitation(ctx context.Context, organizationID, invitationID string) error
+
 	GetDashboardOverview(
 		context.Context,
 		string, // organizationID
@@ -45,14 +63,27 @@ type OrganizationUseCase interface {
 
 type UserUseCase interface {
 	Register(context.Context, string, string, string) (*entity.User, error)
-	Login(context.Context, string, string) (*entity.User, error)
+	Login(context.Context, string, string) (*output.User, error)
 
-	GetByID(context.Context, string) (*entity.User, error)
-	List(context.Context) ([]*entity.User, error)
-	Update(context.Context, *entity.User) error
+	VerifyEmail(context.Context, string) error
+	SendEmailVerification(context.Context, *entity.User) error
+
+	GetByID(context.Context, string) (*output.User, error)
+
+	List(
+		context.Context,
+		string,
+		input.UserFilter,
+	) ([]*output.User, error)
+
+	Update(
+		context.Context,
+		string, // userID
+		*input.UpdateUserInput,
+	) error
+
 	Delete(context.Context, string) error
 }
-
 type StyleUseCase interface {
 	Create(
 		context.Context,
@@ -204,20 +235,14 @@ type GarmentWorkerUseCase interface {
 	Update(
 		context.Context,
 		string, // organizationID
-		*entity.GarmentWorker,
+		string, // workerID
+		*input.UpdateGarmentWorkerInput,
 	) error
 
 	Delete(
 		context.Context,
 		string, // organizationID
 		string, // workerID
-	) error
-
-	SetStatus(
-		context.Context,
-		string, // organizationID
-		string, // workerID
-		entity.WorkerStatus, // status
 	) error
 }
 

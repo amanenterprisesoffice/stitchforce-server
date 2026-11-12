@@ -8,3 +8,5 @@ DROP TABLE IF EXISTS production_entries;
 DROP TABLE IF EXISTS sizes;
 DROP TABLE IF EXISTS worker_payment_allocations;
 DROP TABLE IF EXISTS worker_payments;
+DROP TABLE IF EXISTS licenses;
+DROP TABLE IF EXISTS organization_invitations;

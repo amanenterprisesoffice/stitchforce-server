@@ -178,58 +178,45 @@ func (h *GarmentWorkerHandler) List(c *gin.Context) {
 
 func (h *GarmentWorkerHandler) Update(c *gin.Context) {
 	organizationID := c.Param("organizationID")
-
-	var req request.UpdateGarmentWorker
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		writeValidationError(c, err)
-		return
-	}
-
-	if err := h.validate.Struct(req); err != nil {
-		writeValidationError(c, err)
-		return
-	}
-
-	worker := &entity.GarmentWorker{
-		ID:             c.Param("id"),
-		OrganizationID: organizationID,
-		Name:           req.Name,
-		Phone:          req.Phone,
-		Gender:         req.Gender,
-	}
-
-	if err := h.workers.Update(
-		c.Request.Context(),
-		organizationID,
-		worker,
-	); err != nil {
-		writeError(c, err)
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "garment worker updated successfully",
-	})
-}
-
-// SET STATUS
-
-func (h *GarmentWorkerHandler) SetStatus(c *gin.Context) {
-	organizationID := c.Param("organizationID")
+	workerID := c.Param("id")
 
 	if organizationID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "organization id is required",
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "organization id is required"})
 		return
 	}
 
-	var req request.SetGarmentWorkerStatus
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		writeValidationError(c, err)
+	if workerID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "garment worker id is required"})
 		return
+	}
+
+	var req request.UpdateGarmentWorker
+	var photo *input.UploadFile
+
+	if strings.HasPrefix(c.GetHeader("Content-Type"), "multipart/form-data") {
+		if err := c.ShouldBindWith(&req, binding.FormMultipart); err != nil {
+			writeValidationError(c, err)
+			return
+		}
+
+		file, header, err := c.Request.FormFile("photo")
+		if err == nil {
+			defer file.Close()
+			photo = &input.UploadFile{
+				Reader:      file,
+				Size:        header.Size,
+				ContentType: header.Header.Get("Content-Type"),
+				Filename:    header.Filename,
+			}
+		} else if err != http.ErrMissingFile {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid profile photo"})
+			return
+		}
+	} else {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			writeValidationError(c, err)
+			return
+		}
 	}
 
 	if err := h.validate.Struct(req); err != nil {
@@ -237,21 +224,22 @@ func (h *GarmentWorkerHandler) SetStatus(c *gin.Context) {
 		return
 	}
 
-	if err := h.workers.SetStatus(
-		c.Request.Context(),
-		organizationID,
-		c.Param("id"),
-		req.Status,
-	); err != nil {
+	updateInput := &input.UpdateGarmentWorkerInput{
+		Name:   valueOrEmpty(req.Name),
+		Phone:  valueOrEmpty(req.Phone),
+		Gender: valueOrEmpty(req.Gender),
+		Status: entity.WorkerStatus(valueOrEmpty(req.Status)),
+		Photo:  photo,
+	}
+
+	if err := h.workers.Update(c.Request.Context(), organizationID, workerID, updateInput); err != nil {
 		writeError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "garment worker status updated successfully",
-		"status":  req.Status,
-	})
+	c.JSON(http.StatusOK, gin.H{"message": "garment worker updated successfully"})
 }
+
 
 // DELETE (SOFT DELETE)
 
@@ -277,4 +265,14 @@ func (h *GarmentWorkerHandler) Delete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "garment worker deleted successfully",
 	})
+}
+
+
+// Helpers
+func valueOrEmpty[T any](v *T) T {
+	if v == nil {
+		var zero T
+		return zero
+	}
+	return *v
 }

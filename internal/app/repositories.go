@@ -4,27 +4,29 @@ import (
 	"stitchforce-server/internal/repo"
 	bundlerepo "stitchforce-server/internal/repo/postgres/bundle"
 	garmentworkerrepo "stitchforce-server/internal/repo/postgres/garmentworker"
+	licenserepo "stitchforce-server/internal/repo/postgres/license"
 	organizationrepo "stitchforce-server/internal/repo/postgres/organization"
+	organizationinvitationrepo "stitchforce-server/internal/repo/postgres/organizationinvitation"
 	productionentryrepo "stitchforce-server/internal/repo/postgres/productionentry"
 	sizerepo "stitchforce-server/internal/repo/postgres/size"
 	stylerepo "stitchforce-server/internal/repo/postgres/style"
 	styleopsrepo "stitchforce-server/internal/repo/postgres/styleoperation"
 	userrepo "stitchforce-server/internal/repo/postgres/user"
 	workerpaymentrepo "stitchforce-server/internal/repo/postgres/workerpayment"
-	licenserepo "stitchforce-server/internal/repo/postgres/license"
 	"stitchforce-server/pkg/postgres"
 )
 
 type Repositories struct {
 	Users           repo.UserRepository
 	GarmentWorkers  repo.GarmentWorkerRepository
-	Organization    repo.OrganizationRepository
+	Organizations   repo.OrganizationRepository
+	Invitations     repo.OrganizationInvitationRepository
 	Licenses        repo.LicenseRepository
-	Style           repo.StyleRepository
+	Styles          repo.StyleRepository
 	StyleOperations repo.StyleOperationRepository
 	Sizes           repo.SizeRepository
 	Bundles         repo.BundleRepository
-	ProductionEntry repo.ProductionEntryRepository
+	ProductionEntries repo.ProductionEntryRepository
 	WorkerPayments  repo.WorkerPaymentRepository
 }
 
@@ -32,13 +34,14 @@ func NewRepositories(database *postgres.Client) Repositories {
 	return Repositories{
 		Users:           userrepo.New(database.DB),
 		GarmentWorkers:  garmentworkerrepo.New(database.DB),
-		Organization:    organizationrepo.New(database.DB),
+		Organizations:    organizationrepo.New(database.DB),
+		Invitations:     organizationinvitationrepo.New(database.DB),
 		Licenses:        licenserepo.New(database.DB),
-		Style:           stylerepo.New(database.DB),
+		Styles:           stylerepo.New(database.DB),
 		StyleOperations: styleopsrepo.New(database.DB),
 		Sizes:           sizerepo.New(database.DB),
 		Bundles:         bundlerepo.New(database.DB),
-		ProductionEntry: productionentryrepo.New(database.DB),
+		ProductionEntries: productionentryrepo.New(database.DB),
 		WorkerPayments:  workerpaymentrepo.New(database.DB),
 	}
 }

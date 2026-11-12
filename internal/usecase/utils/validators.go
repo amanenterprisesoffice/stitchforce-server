@@ -92,6 +92,12 @@ func ValidateWorker(worker *entity.GarmentWorker) error {
 		return errors.New("gender must be male, female, or other")
 	}
 
+	if worker.Status != "" {
+		if !worker.Status.IsValid() {
+			return errors.New("invalid worker status")
+		}
+	}
+
 	return nil
 }
 

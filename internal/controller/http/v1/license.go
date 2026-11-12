@@ -25,7 +25,6 @@ func NewLicenseHandler(
 	}
 }
 
-
 func (h *LicenseHandler) Activate(c *gin.Context) {
 	organizationID := c.Param("organizationID")
 
@@ -59,10 +58,9 @@ func (h *LicenseHandler) Activate(c *gin.Context) {
 	)
 
 	if err != nil {
-		status := http.StatusInternalServerError
-		c.JSON(status, gin.H{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"error":   err,
+			"error":   err.Error(),
 		})
 		return
 	}

@@ -19,37 +19,36 @@ import (
 )
 
 const (
-	maxPhotoSize = 5 * 1024 * 1024
+	MaxPhotoSize       = 5 * 1024 * 1024
 	MaxPaginationLimit = 600
 )
 
 type UseCase struct {
 	repository repo.GarmentWorkerRepository
-	logger     *logger.Logger
 	storage    storage.Storage
+	logger     *logger.Logger
 }
 
 func New(
 	repository repo.GarmentWorkerRepository,
-	logger *logger.Logger,
 	storage storage.Storage,
+	logger *logger.Logger,
 ) usecase.GarmentWorkerUseCase {
 	return &UseCase{
 		repository: repository,
-		logger:     logger,
 		storage:    storage,
+		logger:     logger,
 	}
 }
-
 
 func (u *UseCase) Create(
 	ctx context.Context,
 	organizationID string,
 	input *input.CreateGarmentWorkerInput,
 ) error {
-	organizationID, err := ucutils.ValidateOrganizationID(organizationID)
-	if err != nil {
-		return err
+	ok := ucutils.ValidateID(organizationID)
+	if !ok {
+		return errors.New("invalid organization ID")
 	}
 
 	if input == nil {
@@ -81,7 +80,7 @@ func (u *UseCase) Create(
 			return errors.New("photo must not be empty")
 		}
 
-		if input.Photo.Size > maxPhotoSize {
+		if input.Photo.Size > MaxPhotoSize {
 			return errors.New("photo must not exceed 5MB")
 		}
 
@@ -148,16 +147,15 @@ func (u *UseCase) Create(
 	return nil
 }
 
-
 func (u *UseCase) GetByID(
 	ctx context.Context,
 	organizationID string,
 	workerID string,
 ) (*output.GarmentWorker, error) {
 
-	organizationID, err := ucutils.ValidateOrganizationID(organizationID)
-	if err != nil {
-		return nil, err
+	ok := ucutils.ValidateID(organizationID)
+	if !ok {
+		return nil, errors.New("invalid organization ID")
 	}
 
 	workerID = strings.TrimSpace(workerID)
@@ -184,9 +182,9 @@ func (u *UseCase) List(
 	filter input.GarmentWorkerFilter,
 ) ([]*output.GarmentWorker, error) {
 
-	organizationID, err := ucutils.ValidateOrganizationID(organizationID)
-	if err != nil {
-		return nil, err
+	ok := ucutils.ValidateID(organizationID)
+	if !ok {
+		return nil, errors.New("invalid organization ID")
 	}
 
 	// if status exist then validate
@@ -230,27 +228,95 @@ func (u *UseCase) List(
 func (u *UseCase) Update(
 	ctx context.Context,
 	organizationID string,
-	worker *entity.GarmentWorker,
+	workerID string,
+	input *input.UpdateGarmentWorkerInput,
 ) error {
+	if !ucutils.ValidateID(organizationID) {
+		return errors.New("invalid organization ID")
+	}
 
-	organizationID, err := ucutils.ValidateOrganizationID(organizationID)
+	workerID = strings.TrimSpace(workerID)
+	if workerID == "" {
+		return errors.New("garment worker id is required")
+	}
+
+	if input == nil {
+		return errors.New("garment worker input is required")
+	}
+
+	existing, err := u.repository.GetByID(ctx, organizationID, workerID)
 	if err != nil {
 		return err
 	}
 
-	if worker == nil {
-		return errors.New("garment worker is required")
+	oldPhotoKey := existing.PhotoKey
+
+	// Apply only provided fields.
+	if name := strings.TrimSpace(input.Name); name != "" {
+		existing.Name = name
 	}
 
-	worker.ID = strings.TrimSpace(worker.ID)
-
-	if worker.ID == "" {
-		return errors.New("garment worker id is required")
+	if phone := strings.TrimSpace(input.Phone); phone != "" {
+		existing.Phone = phone
 	}
 
-	worker.OrganizationID = organizationID
+	if gender := strings.TrimSpace(input.Gender); gender != "" {
+		existing.Gender = gender
+	}
 
-	if err := ucutils.ValidateWorker(worker); err != nil {
+	if input.Status != "" {
+		if !input.Status.IsValid() {
+			return errors.New("invalid worker status")
+		}
+		existing.Status = input.Status
+	}
+
+	var newPhotoKey string
+
+	if input.Photo != nil {
+		if input.Photo.Size <= 0 {
+			return errors.New("photo must not be empty")
+		}
+
+		if input.Photo.Size > MaxPhotoSize {
+			return errors.New("photo must not exceed 5MB")
+		}
+
+		switch input.Photo.ContentType {
+		case "image/jpeg", "image/png", "image/webp":
+		default:
+			return errors.New("unsupported photo format")
+		}
+
+		photoID, err := utils.NewID()
+		if err != nil {
+			return err
+		}
+
+		newPhotoKey = fmt.Sprintf(
+			"organizations/%s/workers/%s/profile/%s",
+			organizationID,
+			workerID,
+			photoID,
+		)
+
+		if err := u.storage.Upload(
+			ctx,
+			newPhotoKey,
+			input.Photo.Reader,
+			input.Photo.Size,
+			input.Photo.ContentType,
+		); err != nil {
+			return fmt.Errorf("upload worker photo: %w", err)
+		}
+
+		existing.PhotoKey = newPhotoKey
+	}
+
+	if err := ucutils.ValidateWorker(existing); err != nil {
+		if newPhotoKey != "" {
+			_ = u.storage.Delete(ctx, newPhotoKey)
+		}
 		return err
 	}
 
@@ -258,61 +324,30 @@ func (u *UseCase) Update(
 		ctx,
 		"updating garment worker",
 		"organization_id", organizationID,
-		"worker_id", worker.ID,
-	)
-
-	return u.repository.Update(ctx, organizationID, worker)
-}
-
-// DEACTIVATE / REACTIVATE
-// SetStatus allows administrators to activate or deactivate workers.
-// Deleted workers cannot be activated through this method.
-func (u *UseCase) SetStatus(
-	ctx context.Context,
-	organizationID string,
-	workerID string,
-	status entity.WorkerStatus,
-) error {
-
-	organizationID, err := ucutils.ValidateOrganizationID(organizationID)
-	if err != nil {
-		return err
-	}
-
-	workerID = strings.TrimSpace(workerID)
-
-	if workerID == "" {
-		return errors.New("garment worker id is required")
-	}
-
-	if !status.IsValid() {
-		return errors.New("invalid worker status")
-	}
-
-	worker, err := u.repository.GetByID(
-		ctx,
-		organizationID,
-		workerID,
-	)
-	if err != nil {
-		return err
-	}
-
-	worker.Status = status
-
-	worker.UpdatedAt = time.Now().UTC()
-
-	if err := u.repository.Update(ctx, organizationID, worker); err != nil {
-		return fmt.Errorf("update worker status: %w", err)
-	}
-
-	u.logger.InfoContext(
-		ctx,
-		"garment worker status updated",
-		"organization_id", organizationID,
 		"worker_id", workerID,
-		"status", status,
 	)
+
+	if err := u.repository.Update(ctx, organizationID, existing); err != nil {
+		if newPhotoKey != "" {
+			if deleteErr := u.storage.Delete(ctx, newPhotoKey); deleteErr != nil {
+				u.logger.ErrorContext(ctx, "failed to cleanup uploaded worker photo",
+					"photo_key", newPhotoKey,
+					"error", deleteErr,
+				)
+			}
+		}
+		return err
+	}
+
+	// Delete old photo only after successful database update.
+	if newPhotoKey != "" && oldPhotoKey != "" {
+		if err := u.storage.Delete(ctx, oldPhotoKey); err != nil {
+			u.logger.ErrorContext(ctx, "failed to delete previous worker photo",
+				"photo_key", oldPhotoKey,
+				"error", err,
+			)
+		}
+	}
 
 	return nil
 }
@@ -324,9 +359,9 @@ func (u *UseCase) Delete(
 	workerID string,
 ) error {
 
-	organizationID, err := ucutils.ValidateOrganizationID(organizationID)
-	if err != nil {
-		return err
+	ok := ucutils.ValidateID(organizationID)
+	if !ok {
+		return errors.New("invalid organization ID")
 	}
 
 	workerID = strings.TrimSpace(workerID)
@@ -336,7 +371,7 @@ func (u *UseCase) Delete(
 	}
 
 	// Verify worker exists and belongs to organization.
-	_, err = u.repository.GetByID(
+	_, err := u.repository.GetByID(
 		ctx,
 		organizationID,
 		workerID,
@@ -365,7 +400,6 @@ func (u *UseCase) Delete(
 
 	return nil
 }
-
 
 // ENTITY TO OUTPUT
 func (u *UseCase) toOutput(

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"stitchforce-server/config"
 	"stitchforce-server/internal/storage"
 	"stitchforce-server/internal/usecase"
 	bundleuc "stitchforce-server/internal/usecase/bundle"
@@ -13,44 +14,56 @@ import (
 	styleopsuc "stitchforce-server/internal/usecase/styleoperation"
 	useruc "stitchforce-server/internal/usecase/user"
 	workerpaymentuc "stitchforce-server/internal/usecase/workerpayment"
+	"stitchforce-server/pkg/email"
 	"stitchforce-server/pkg/logger"
 )
 
 type UseCases struct {
-	Users           usecase.UserUseCase
-	GarmentWorkers  usecase.GarmentWorkerUseCase
-	Organization    usecase.OrganizationUseCase
-	License         usecase.LicenseUseCase
-	Style           usecase.StyleUseCase
-	StyleOperations usecase.StyleOperationUseCase
-	Size            usecase.SizeUseCase
-	Bundle          usecase.BundleUseCase
-	ProductionEntry usecase.ProductionEntryUseCase
-	WorkerPayment usecase.WorkerPaymentUseCase
+	Users             usecase.UserUseCase
+	GarmentWorkers    usecase.GarmentWorkerUseCase
+	Organizations     usecase.OrganizationUseCase
+	License           usecase.LicenseUseCase
+	Styles            usecase.StyleUseCase
+	StyleOperations   usecase.StyleOperationUseCase
+	Size              usecase.SizeUseCase
+	Bundle            usecase.BundleUseCase
+	ProductionEntries usecase.ProductionEntryUseCase
+	WorkerPayments    usecase.WorkerPaymentUseCase
 }
 
 func NewUseCases(
 	repositories Repositories,
 	log *logger.Logger,
 	storage storage.Storage,
+	emailer email.Sender,
+	cfg config.Config,
 ) UseCases {
 	return UseCases{
 		Users: useruc.New(
 			repositories.Users,
 			log,
+			storage,
+			emailer,
+			cfg.Frontend,
 		),
 		GarmentWorkers: garmentworkeruc.New(
 			repositories.GarmentWorkers,
-			log,
 			storage,
+			log,
 		),
-		Organization:    organizationuc.New(repositories.Organization, log),
-		Style:           styleuc.New(repositories.Style, log),
-		StyleOperations: styleopsuc.New(repositories.StyleOperations, log),
-		Size:            sizeuc.New(repositories.Sizes, log),
-		Bundle:          bundleuc.New(repositories.Bundles, storage, log),
-		ProductionEntry: productionentryuc.New(repositories.ProductionEntry, repositories.Bundles, repositories.GarmentWorkers, repositories.StyleOperations, repositories.Style, storage, log),
-		License:         licenseuc.New(repositories.Licenses, log),
-		WorkerPayment:   workerpaymentuc.New(repositories.WorkerPayments, repositories.GarmentWorkers, storage, log),
+		Organizations: organizationuc.New(repositories.Organizations,
+			repositories.Invitations,
+			repositories.Users,
+			storage,
+			emailer,
+			cfg.Frontend,
+			log),
+		Styles:            styleuc.New(repositories.Styles, log),
+		StyleOperations:   styleopsuc.New(repositories.StyleOperations, log),
+		Size:              sizeuc.New(repositories.Sizes, log),
+		Bundle:            bundleuc.New(repositories.Bundles, storage, log),
+		ProductionEntries: productionentryuc.New(repositories.ProductionEntries, repositories.Bundles, repositories.GarmentWorkers, repositories.StyleOperations, repositories.Styles, storage, log),
+		License:           licenseuc.New(repositories.Licenses, log),
+		WorkerPayments:    workerpaymentuc.New(repositories.WorkerPayments, repositories.GarmentWorkers, storage, log),
 	}
 }

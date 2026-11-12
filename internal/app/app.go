@@ -10,6 +10,7 @@ import (
 
 	"stitchforce-server/config"
 	"stitchforce-server/internal/storage/s3"
+	"stitchforce-server/pkg/email/resend"
 	"stitchforce-server/pkg/jwt"
 	"stitchforce-server/pkg/logger"
 	"stitchforce-server/pkg/postgres"
@@ -52,8 +53,14 @@ func Run() {
 		return
 	}
 
+	emailer, err := resend.New(cfg.Resend)
+	if err != nil {
+		log.Fatal("failed to initialize email service", "error", err)
+		return
+	}
+
 	repositories := NewRepositories(db)
-	useCases := NewUseCases(repositories, log, storage)
+	useCases := NewUseCases(repositories, log, storage, emailer, cfg)
 
 	jwtManager := jwt.New(
 		cfg.JWT.Secret,

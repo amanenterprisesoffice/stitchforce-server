@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"stitchforce-server/internal/entity"
+	"stitchforce-server/internal/usecase/output"
 
 	"github.com/gin-gonic/gin"
 )
@@ -15,7 +15,7 @@ type OrganizationChecker interface {
 		ctx context.Context,
 		userID string,
 		organizationID string,
-	) (*entity.Organization, error)
+	) (*output.Organization, error)
 }
 
 func OrganizationAccess(
@@ -57,7 +57,7 @@ func OrganizationAccess(
 					"license_status":     org.LicenseStatus,
 					"license_expires_at": org.LicenseExpiresAt,
 					// give some indication to client so it can redner some ui
-					"invalid_license":      true,
+					"invalid_license": true,
 				})
 				return
 			}

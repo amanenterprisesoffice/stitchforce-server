@@ -11,8 +11,8 @@ type Login struct {
 	Password string `json:"password" validate:"required,min=8,max=72"`
 }
 
+
 type UpdateUser struct {
-	Name  string `json:"name" validate:"required,min=2,max=100"`
-	Email string `json:"email" validate:"required,email,max=255"`
-	Role  string `json:"role" validate:"required,oneof=org_admin staff"`
+	Name  *string `form:"name" json:"name" binding:"omitempty,min=2,max=100"`
+	Email *string `form:"email" json:"email" binding:"omitempty,email"`
 }

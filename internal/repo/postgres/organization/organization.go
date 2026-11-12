@@ -44,21 +44,24 @@ func (r *Repository) Create(
 	)
 }
 
+
 func (r *Repository) GetByUserAndOrganization(
 	ctx context.Context,
 	userID string,
 	organizationID string,
 ) (*entity.Organization, error) {
-
-	var (
-		org       entity.Organization
-		expiresAt sql.NullTime
-	)
-
-	query := `
-		SELECT
+	org, err := scanOrganization(r.db.QueryRowContext(
+		ctx,
+		`SELECT
 			o.id,
 			o.name,
+			o.address_line_1,
+			o.address_line_2,
+			o.city,
+			o.state,
+			o.postal_code,
+			o.country,
+			o.photo_key,
 			o.license_status,
 			o.license_expires_at,
 			o.created_at,
@@ -66,71 +69,9 @@ func (r *Repository) GetByUserAndOrganization(
 		FROM organizations o
 		INNER JOIN users u ON u.organization_id = o.id
 		WHERE u.id = $1
-		  AND o.id = $2
-	`
-
-	err := r.db.QueryRowContext(
-		ctx,
-		query,
+		  AND o.id = $2`,
 		userID,
 		organizationID,
-	).Scan(
-		&org.ID,
-		&org.Name,
-		&org.LicenseStatus,
-		&expiresAt,
-		&org.CreatedAt,
-		&org.UpdatedAt,
-	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if expiresAt.Valid {
-		org.LicenseExpiresAt = &expiresAt.Time
-	}
-
-	return &org, nil
-}
-
-func scanOrganization(
-	row interface {
-		Scan(...any) error
-	},
-) (*entity.Organization, error) {
-	org := &entity.Organization{}
-
-	err := row.Scan(
-		&org.ID,
-		&org.Name,
-		&org.LicenseStatus,
-		&org.LicenseExpiresAt,
-		&org.CreatedAt,
-		&org.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return org, nil
-}
-
-const selectColumns = `
-    id, name, license_status, license_expires_at,
-    created_at, updated_at
-`
-
-func (r *Repository) GetByID(
-	ctx context.Context,
-	id string,
-) (*entity.Organization, error) {
-	org, err := scanOrganization(r.db.QueryRowContext(
-		ctx,
-		`SELECT `+selectColumns+`
-         FROM organizations
-         WHERE id = $1`,
-		id,
 	))
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -143,66 +84,108 @@ func (r *Repository) GetByID(
 	return org, nil
 }
 
+func (r *Repository) GetByID(
+    ctx context.Context,
+    id string,
+) (*entity.Organization, error) {
+    org, err := scanOrganization(r.db.QueryRowContext(
+        ctx,
+        `SELECT `+selectColumns+`
+         FROM organizations
+         WHERE id = $1`,
+        id,
+    ))
+
+    if errors.Is(err, sql.ErrNoRows) {
+        return nil, repo.ErrNotFound
+    }
+    if err != nil {
+        return nil, err
+    }
+
+    return org, nil
+}
+
 func (r *Repository) List(
-	ctx context.Context,
+    ctx context.Context,
 ) ([]*entity.Organization, error) {
-	rows, err := r.db.QueryContext(
-		ctx,
-		`SELECT `+selectColumns+`
+    rows, err := r.db.QueryContext(
+        ctx,
+        `SELECT `+selectColumns+`
          FROM organizations
          ORDER BY created_at DESC`,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
+    )
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
 
-	organizations := make([]*entity.Organization, 0)
+    organizations := make([]*entity.Organization, 0)
 
-	for rows.Next() {
-		org, err := scanOrganization(rows)
-		if err != nil {
-			return nil, err
-		}
+    for rows.Next() {
+        org, err := scanOrganization(rows)
+        if err != nil {
+            return nil, err
+        }
 
-		organizations = append(organizations, org)
-	}
+        organizations = append(organizations, org)
+    }
 
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
+    if err := rows.Err(); err != nil {
+        return nil, err
+    }
 
-	return organizations, nil
+    return organizations, nil
 }
 
 func (r *Repository) Update(
-	ctx context.Context,
-	org *entity.Organization,
+    ctx context.Context,
+    org *entity.Organization,
 ) error {
-	result, err := r.db.ExecContext(
-		ctx,
-		`UPDATE organizations
-         SET name = $2,
-             updated_at = NOW()
-         WHERE id = $1`,
-		org.ID,
-		org.Name,
-	)
-	if err != nil {
-		return err
-	}
 
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
-		return repo.ErrNotFound
-	}
+    query := `
+        UPDATE organizations
+        SET
+            name = COALESCE(NULLIF($2, ''), name),
+            address_line_1 = COALESCE(NULLIF($3, ''), address_line_1),
+            address_line_2 = COALESCE(NULLIF($4, ''), address_line_2),
+            city = COALESCE(NULLIF($5, ''), city),
+            state = COALESCE(NULLIF($6, ''), state),
+            postal_code = COALESCE(NULLIF($7, ''), postal_code),
+            country = COALESCE(NULLIF($8, ''), country),
+            photo_key = COALESCE(NULLIF($9, ''), photo_key),
+            updated_at = NOW()
+        WHERE id = $1
+    `
 
-	return nil
+    result, err := r.db.ExecContext(
+        ctx,
+        query,
+        org.ID,
+        org.Name,
+        org.AddressLine1,
+        org.AddressLine2,
+        org.City,
+        org.State,
+        org.PostalCode,
+        org.Country,
+        org.PhotoKey,
+    )
+    if err != nil {
+        return err
+    }
+
+    affected, err := result.RowsAffected()
+    if err != nil {
+        return err
+    }
+
+    if affected == 0 {
+        return repo.ErrNotFound
+    }
+
+    return nil
 }
-
 func (r *Repository) Delete(
 	ctx context.Context,
 	id string,
@@ -778,4 +761,55 @@ func dashboardBucketLabel(
 	}
 
 	return start.Format("Jan 2")
+}
+
+
+const selectColumns = `
+    id,
+    name,
+    address_line_1,
+    address_line_2,
+    city,
+    state,
+    postal_code,
+    country,
+    photo_key,
+    license_status,
+    license_expires_at,
+    created_at,
+    updated_at
+`
+
+func scanOrganization(row interface {
+    Scan(dest ...any) error
+}) (*entity.Organization, error) {
+    var (
+        org       entity.Organization
+        expiresAt sql.NullTime
+    )
+
+    err := row.Scan(
+        &org.ID,
+        &org.Name,
+        &org.AddressLine1,
+        &org.AddressLine2,
+        &org.City,
+        &org.State,
+        &org.PostalCode,
+        &org.Country,
+        &org.PhotoKey,
+        &org.LicenseStatus,
+        &expiresAt,
+        &org.CreatedAt,
+        &org.UpdatedAt,
+    )
+    if err != nil {
+        return nil, err
+    }
+
+    if expiresAt.Valid {
+        org.LicenseExpiresAt = &expiresAt.Time
+    }
+
+    return &org, nil
 }

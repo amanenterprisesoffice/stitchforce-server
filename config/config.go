@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -15,6 +16,8 @@ type Config struct {
 	JWT      JWTConfig
 	Log      LogConfig
 	Storage  StorageConfig
+	Resend   ResendConfig
+	Frontend FrontendConfig
 }
 
 type (
@@ -25,12 +28,17 @@ type (
 	}
 
 	StorageConfig struct {
-		Endpoint      string
-		Region        string
-		Bucket        string
-		AccessKey     string
-		SecretKey     string
+		Endpoint       string
+		Region         string
+		Bucket         string
+		AccessKey      string
+		SecretKey      string
 		ForcePathStyle bool
+	}
+
+	ResendConfig struct {
+		APIKey string
+		From   string
 	}
 
 	PostgresConfig struct {
@@ -50,6 +58,9 @@ type (
 
 	LogConfig struct {
 		Level string
+	}
+	FrontendConfig struct {
+		URL string
 	}
 )
 
@@ -81,12 +92,19 @@ func Load() Config {
 			Level: env("LOG_LEVEL", "info"),
 		},
 		Storage: StorageConfig{
-			Endpoint:      env("STORAGE_ENDPOINT", ""),
-			Region:        env("STORAGE_REGION", ""),
-			Bucket:        env("STORAGE_BUCKET", ""),
-			AccessKey:     env("STORAGE_ACCESS_KEY", ""),
-			SecretKey:     env("STORAGE_SECRET_KEY", ""),
+			Endpoint:       env("STORAGE_ENDPOINT", ""),
+			Region:         env("STORAGE_REGION", ""),
+			Bucket:         env("STORAGE_BUCKET", ""),
+			AccessKey:      env("STORAGE_ACCESS_KEY", ""),
+			SecretKey:      env("STORAGE_SECRET_KEY", ""),
 			ForcePathStyle: env("STORAGE_FORCE_PATH_STYLE", "true") == "true",
+		},
+		Resend: ResendConfig{
+			APIKey: env("RESEND_API_KEY", ""),
+			From:   env("RESEND_FROM", ""),
+		},
+		Frontend: FrontendConfig{
+			URL: strings.TrimRight(env("FRONTEND_URL", ""), "/"),
 		},
 	}
 }
