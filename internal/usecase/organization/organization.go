@@ -637,7 +637,7 @@ func (u *UseCase) SendDueDashboardAlerts(
 			continue
 		}
 
-		body, err := u.buildDashboardAlertEmail(org, overview, now)
+		body, err := u.buildDashboardAlertEmail(org, overview, now, u.frontendCfg.URL)
 		if err != nil {
 			failures = append(failures, fmt.Errorf(
 				"organization %s: build dashboard alert email: %w",
@@ -946,6 +946,7 @@ func (u *UseCase) buildDashboardAlertEmail(
 	organization *entity.Organization,
 	overview *output.DashboardOverview,
 	generatedAt time.Time,
+	frontendURL string,
 ) (string, error) {
 	if organization == nil {
 		return "", errors.New("organization is required")
@@ -955,6 +956,11 @@ func (u *UseCase) buildDashboardAlertEmail(
 		return "", errors.New("dashboard overview is required")
 	}
 
+	if frontendURL == "" {
+		return "", errors.New("frontend URL is not configured")
+	}
+
+	dashboardURL := html.EscapeString(frontendURL + "/dashboard")
 	organizationName := html.EscapeString(organization.Name)
 	generatedTime := html.EscapeString(
 		generatedAt.Format("02 Jan 2006, 03:04 PM"),
@@ -974,30 +980,42 @@ func (u *UseCase) buildDashboardAlertEmail(
 	body := fmt.Sprintf(`
 		<div>
 			<div style="
-				margin-bottom: 28px;
+				margin-bottom: 24px;
 				padding-bottom: 20px;
 				border-bottom: 1px solid #e4e4e7;
 			">
-				<h2 style="margin: 0; font-size: 24px; font-weight: 700;">
-					Dashboard Summary
+				<h2 style="margin: 0 0 6px; font-size: 24px; font-weight: 700;">
+					Factory Activity Report
 				</h2>
-				<p style="
-					margin: 8px 0 0;
-					color: #71717a;
-					font-size: 14px;
-				">
+
+				<p style="margin: 0; color: #52525b; font-size: 15px;">
 					%s
 				</p>
-				<p style="
-					margin: 5px 0 0;
-					color: #a1a1aa;
-					font-size: 12px;
-				">
-					Generated %s
+
+				<p style="margin: 5px 0 0; color: #a1a1aa; font-size: 12px;">
+					Report generated on %s
 				</p>
+
+				<div style="margin-top: 18px;">
+					<a href="%s"
+						style="
+							display: inline-block;
+							padding: 11px 20px;
+							background-color: #18181b;
+							color: #ffffff;
+							text-decoration: none;
+							border-radius: 6px;
+							font-size: 14px;
+							font-weight: 600;
+						">
+						View Factory Dashboard
+					</a>
+				</div>
 			</div>
 
-			<h3 style="font-size: 17px;">Factory Overview</h3>
+			<h3 style="font-size: 17px; margin-bottom: 12px;">
+				Today's Activity
+			</h3>
 
 			<table style="
 				width: 100%%;
@@ -1005,45 +1023,113 @@ func (u *UseCase) buildDashboardAlertEmail(
 				font-size: 14px;
 			">
 				<tr>
-					<td style="padding: 10px; border-bottom: 1px solid #eee;">Total Workers</td>
-					<td style="padding: 10px; text-align: right;">%d</td>
+					<td style="padding: 10px; border-bottom: 1px solid #eee;">
+						Production Quantity
+					</td>
+					<td style="padding: 10px; text-align: right; font-weight: 600;">
+						%d pieces
+					</td>
 				</tr>
 				<tr>
-					<td style="padding: 10px; border-bottom: 1px solid #eee;">Active Workers</td>
-					<td style="padding: 10px; text-align: right;">%d</td>
+					<td style="padding: 10px; border-bottom: 1px solid #eee;">
+						Production Entries
+					</td>
+					<td style="padding: 10px; text-align: right;">
+						%d
+					</td>
 				</tr>
 				<tr>
-					<td style="padding: 10px; border-bottom: 1px solid #eee;">Inactive Workers</td>
-					<td style="padding: 10px; text-align: right;">%d</td>
+					<td style="padding: 10px; border-bottom: 1px solid #eee;">
+						Production Earnings
+					</td>
+					<td style="padding: 10px; text-align: right; font-weight: 600;">
+						%s
+					</td>
 				</tr>
 				<tr>
-					<td style="padding: 10px; border-bottom: 1px solid #eee;">Styles</td>
-					<td style="padding: 10px; text-align: right;">%d</td>
+					<td style="padding: 10px; border-bottom: 1px solid #eee;">
+						Payments Made
+					</td>
+					<td style="padding: 10px; text-align: right;">
+						%d
+					</td>
 				</tr>
 				<tr>
-					<td style="padding: 10px; border-bottom: 1px solid #eee;">Bundles</td>
-					<td style="padding: 10px; text-align: right;">%d</td>
-				</tr>
-				<tr>
-					<td style="padding: 10px;">Production Entries</td>
-					<td style="padding: 10px; text-align: right;">%d</td>
+					<td style="padding: 10px;">
+						Total Payments
+					</td>
+					<td style="padding: 10px; text-align: right; font-weight: 600;">
+						%s
+					</td>
 				</tr>
 			</table>
 
-			<h3 style="margin-top: 28px; font-size: 17px;">Bundle Status</h3>
+			<h3 style="font-size: 17px; margin-top: 28px; margin-bottom: 4px;">
+				Overall Factory Summary
+			</h3>
+
+			<p style="margin: 0 0 12px; color: #a1a1aa; font-size: 12px;">
+				All-time totals
+			</p>
 
 			<table style="
 				width: 100%%;
 				border-collapse: collapse;
 				font-size: 14px;
 			">
-				<tr><td style="padding: 9px;">Created</td><td style="text-align: right;">%d</td></tr>
-				<tr><td style="padding: 9px;">Ready</td><td style="text-align: right;">%d</td></tr>
-				<tr><td style="padding: 9px;">In Progress</td><td style="text-align: right;">%d</td></tr>
-				<tr><td style="padding: 9px;">Completed</td><td style="text-align: right;">%d</td></tr>
+				<tr>
+					<td style="padding: 10px; border-bottom: 1px solid #eee;">
+						Total Workers
+					</td>
+					<td style="padding: 10px; text-align: right;">
+						%d
+					</td>
+				</tr>
+				<tr>
+					<td style="padding: 10px; border-bottom: 1px solid #eee;">
+						Active Workers
+					</td>
+					<td style="padding: 10px; text-align: right;">
+						%d
+					</td>
+				</tr>
+				<tr>
+					<td style="padding: 10px; border-bottom: 1px solid #eee;">
+						Inactive Workers
+					</td>
+					<td style="padding: 10px; text-align: right;">
+						%d
+					</td>
+				</tr>
+				<tr>
+					<td style="padding: 10px; border-bottom: 1px solid #eee;">
+						Styles
+					</td>
+					<td style="padding: 10px; text-align: right;">
+						%d
+					</td>
+				</tr>
+				<tr>
+					<td style="padding: 10px; border-bottom: 1px solid #eee;">
+						Total Bundles
+					</td>
+					<td style="padding: 10px; text-align: right;">
+						%d
+					</td>
+				</tr>
+				<tr>
+					<td style="padding: 10px;">
+						Production Entries
+					</td>
+					<td style="padding: 10px; text-align: right;">
+						%d
+					</td>
+				</tr>
 			</table>
 
-			<h3 style="margin-top: 28px; font-size: 17px;">Worker Earnings</h3>
+			<h3 style="font-size: 17px; margin-top: 28px; margin-bottom: 12px;">
+				Bundle Status
+			</h3>
 
 			<table style="
 				width: 100%%;
@@ -1051,31 +1137,64 @@ func (u *UseCase) buildDashboardAlertEmail(
 				font-size: 14px;
 			">
 				<tr>
-					<td style="padding: 10px; border-bottom: 1px solid #eee;">Total Earned</td>
-					<td style="padding: 10px; text-align: right;">%s</td>
+					<td style="padding: 9px;">Created</td>
+					<td style="text-align: right;">%d</td>
 				</tr>
 				<tr>
-					<td style="padding: 10px; border-bottom: 1px solid #eee;">Total Paid</td>
-					<td style="padding: 10px; text-align: right;">%s</td>
+					<td style="padding: 9px;">Ready</td>
+					<td style="text-align: right;">%d</td>
 				</tr>
 				<tr>
-					<td style="padding: 10px;">Pending Payment</td>
-					<td style="padding: 10px; text-align: right; font-weight: 700;">%s</td>
+					<td style="padding: 9px;">In Progress</td>
+					<td style="text-align: right;">%d</td>
+				</tr>
+				<tr>
+					<td style="padding: 9px;">Completed</td>
+					<td style="text-align: right;">%d</td>
 				</tr>
 			</table>
 
-			<h3 style="margin-top: 28px; font-size: 17px;">Today's Activity</h3>
+			<h3 style="font-size: 17px; margin-top: 28px; margin-bottom: 4px;">
+				Worker Earnings
+			</h3>
+
+			<p style="margin: 0 0 12px; color: #a1a1aa; font-size: 12px;">
+				All-time earnings and payments
+			</p>
 
 			<table style="
 				width: 100%%;
 				border-collapse: collapse;
 				font-size: 14px;
 			">
-				<tr><td style="padding: 9px;">Production Quantity</td><td style="text-align: right;">%d</td></tr>
-				<tr><td style="padding: 9px;">Production Entries</td><td style="text-align: right;">%d</td></tr>
-				<tr><td style="padding: 9px;">Production Amount</td><td style="text-align: right;">%s</td></tr>
-				<tr><td style="padding: 9px;">Payments Made</td><td style="text-align: right;">%d</td></tr>
-				<tr><td style="padding: 9px;">Payment Amount</td><td style="text-align: right;">%s</td></tr>
+				<tr>
+					<td style="padding: 10px; border-bottom: 1px solid #eee;">
+						Total Earned
+					</td>
+					<td style="padding: 10px; text-align: right;">
+						%s
+					</td>
+				</tr>
+				<tr>
+					<td style="padding: 10px; border-bottom: 1px solid #eee;">
+						Total Paid
+					</td>
+					<td style="padding: 10px; text-align: right;">
+						%s
+					</td>
+				</tr>
+				<tr>
+					<td style="padding: 10px; font-weight: 600;">
+						Pending Payment
+					</td>
+					<td style="
+						padding: 10px;
+						text-align: right;
+						font-weight: 700;
+					">
+						%s
+					</td>
+				</tr>
 			</table>
 
 			<div style="
@@ -1086,36 +1205,52 @@ func (u *UseCase) buildDashboardAlertEmail(
 				font-size: 12px;
 				line-height: 1.6;
 			">
-				This is an automated dashboard report from StitchForce.
-				<br>
-				Garment Manufacturing Management System
+				<p style="margin: 0;">
+					This is an automated factory activity report from StitchForce.
+				</p>
+				<p style="margin: 4px 0 0;">
+					Garment Manufacturing Management System
+				</p>
+				<p style="margin: 12px 0 0;">
+					<a href="%s" style="color: #2563eb; text-decoration: none;">
+						Open StitchForce Dashboard
+					</a>
+				</p>
 			</div>
 		</div>
 	`,
 		organizationName,
 		generatedTime,
+		dashboardURL,
+
+		overview.Today.ProductionQuantity,
+		overview.Today.ProductionEntries,
+		todayProductionAmount,
+		overview.Today.PaymentCount,
+		todayPaymentAmount,
+
 		overview.TotalWorkers,
 		overview.ActiveWorkers,
 		overview.InactiveWorkers,
 		overview.TotalStyles,
 		overview.TotalBundles,
 		overview.TotalProductionEntries,
+
 		overview.BundleStatus.Created,
 		overview.BundleStatus.Ready,
 		overview.BundleStatus.InProgress,
 		overview.BundleStatus.Completed,
+
 		totalEarned,
 		totalPaid,
 		totalPending,
-		overview.Today.ProductionQuantity,
-		overview.Today.ProductionEntries,
-		todayProductionAmount,
-		overview.Today.PaymentCount,
-		todayPaymentAmount,
+
+		dashboardURL,
 	)
 
 	return email.Render(body)
 }
+
 
 func formatDashboardMoney(amount int64) string {
 	return fmt.Sprintf("₹%.2f", float64(amount)/100)
