@@ -4,11 +4,5 @@
       "source": "/(.*)",
       "destination": "/cmd/app/main.go"
     }
-  ],
-  "crons": [
-    {
-      "path": "/cron/dashboard-alerts",
-      "schedule": "*/30 * * * *"
-    }
   ]
 }

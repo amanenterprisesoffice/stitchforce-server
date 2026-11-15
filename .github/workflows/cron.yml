@@ -1,0 +1,17 @@
+name: Dashboard Alerts Cron
+
+on:
+  schedule:
+    # Runs every 30 minutes
+    - cron: '*/30 * * * *'
+  # Lets you trigger the job manually from the GitHub Actions tab
+  workflow_dispatch:
+
+jobs:
+  trigger-cron:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Vercel Cron Endpoint
+        run: |
+          curl --fail -sS -X GET "${{ secrets.APP_URL }}/cron/dashboard-alerts" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
