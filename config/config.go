@@ -18,7 +18,7 @@ type Config struct {
 	Storage  StorageConfig
 	Resend   ResendConfig
 	Frontend FrontendConfig
-	Vercel   VercelConfig
+	Scheduler   SchedulerConfig
 }
 
 type (
@@ -64,7 +64,7 @@ type (
 	FrontendConfig struct {
 		URL string
 	}
-	VercelConfig struct {
+	SchedulerConfig struct {
 		CronSecret string
 	}
 )
@@ -112,7 +112,7 @@ func Load() Config {
 		Frontend: FrontendConfig{
 			URL: strings.TrimRight(env("FRONTEND_URL", ""), "/"),
 		},
-		Vercel: VercelConfig{
+		Scheduler: SchedulerConfig{
 			CronSecret: env("CRON_SECRET", ""),
 		},
 	}

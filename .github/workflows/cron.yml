@@ -13,5 +13,5 @@ jobs:
     steps:
       - name: Call Vercel Cron Endpoint
         run: |
-          curl --fail -sS -X GET "${{ secrets.APP_URL }}/cron/dashboard-alerts" \
+          curl --fail -sS -X GET "${{ secrets.APP_URL }}/v1/cron/dashboard-alerts" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

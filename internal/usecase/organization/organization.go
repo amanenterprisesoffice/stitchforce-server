@@ -702,6 +702,13 @@ func (u *UseCase) toOutput(
 		Country:          org.Country,
 		LicenseStatus:    org.LicenseStatus,
 		LicenseExpiresAt: org.LicenseExpiresAt,
+
+
+		DashboardAlertEnabled: org.DashboardAlertEnabled,
+		DashboardAlertEmail: org.DashboardAlertEmail,
+		DashboardAlertSchedule:   org.DashboardAlertSchedule,
+		DashboardAlertLastSentAt: org.DashboardAlertLastSentAt,
+
 		CreatedAt:        org.CreatedAt,
 		UpdatedAt:        org.UpdatedAt,
 	}

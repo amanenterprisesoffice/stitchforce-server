@@ -893,6 +893,8 @@ func scanOrganization(row interface {
 	var (
 		org       entity.Organization
 		expiresAt sql.NullTime
+		schedule  []byte
+		lastSent  sql.NullTime
 	)
 
 	err := row.Scan(
@@ -911,8 +913,8 @@ func scanOrganization(row interface {
 		&org.UpdatedAt,
 		&org.DashboardAlertEnabled,
 		&org.DashboardAlertEmail,
-		&org.DashboardAlertSchedule,
-		&org.DashboardAlertLastSentAt,
+		&schedule,
+		&lastSent,
 	)
 	if err != nil {
 		return nil, err
@@ -920,6 +922,16 @@ func scanOrganization(row interface {
 
 	if expiresAt.Valid {
 		org.LicenseExpiresAt = &expiresAt.Time
+	}
+
+	if len(schedule) > 0 {
+		if err := json.Unmarshal(schedule, &org.DashboardAlertSchedule); err != nil {
+			return nil, fmt.Errorf("unmarshal dashboard alert schedule: %w", err)
+		}
+	}
+
+	if lastSent.Valid {
+		org.DashboardAlertLastSentAt = &lastSent.Time
 	}
 
 	return &org, nil

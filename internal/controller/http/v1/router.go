@@ -59,7 +59,7 @@ func NewRouter(
 	{
 
 		cron := v1.Group("cron")
-		cron.Use(middleware.VerifyCronSecret(cfg.Vercel))
+		cron.Use(middleware.VerifyCronSecret(cfg.Scheduler))
 		{
 			cron.GET("/dashboard-alerts", cronHandler.SendDashboardAlerts)
 		}

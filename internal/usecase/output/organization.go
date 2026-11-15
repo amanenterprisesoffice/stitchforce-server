@@ -1,6 +1,9 @@
 package output
 
-import "time"
+import (
+	"stitchforce-server/internal/entity"
+	"time"
+)
 
 type Organization struct {
 	ID               string     `json:"id"`
@@ -14,6 +17,12 @@ type Organization struct {
 	PhotoURL         *string    `json:"photo_url,omitempty"`
 	LicenseStatus    string     `json:"license_status"`
 	LicenseExpiresAt *time.Time `json:"license_expires_at"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+
+	DashboardAlertEnabled    bool                          `json:"dashboard_alert_enabled" db:"dashboard_alert_enabled"`
+	DashboardAlertEmail      string                        `json:"dashboard_alert_email" db:"dashboard_alert_email"`
+	DashboardAlertSchedule   entity.DashboardAlertSchedule `json:"dashboard_alert_schedule" db:"dashboard_alert_schedule"`
+	DashboardAlertLastSentAt *time.Time                    `json:"dashboard_alert_last_sent_at" db:"dashboard_alert_last_sent_at"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }

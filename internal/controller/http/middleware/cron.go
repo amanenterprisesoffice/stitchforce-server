@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func VerifyCronSecret(vercelCfg config.VercelConfig) gin.HandlerFunc {
+func VerifyCronSecret(vercelCfg config.SchedulerConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		secret := vercelCfg.CronSecret
 		if secret == "" {
