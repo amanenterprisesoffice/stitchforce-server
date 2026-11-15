@@ -58,35 +58,34 @@ func (h *WorkerPaymentHandler) Create(c *gin.Context) {
 		return
 	}
 
-	fromDate, err := time.Parse(DateLayout, req.FromDate)
+	fromDate, err := parseDateValue(req.FromDate, "from_date")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("incorrect from_date format; expected %s", DateLayout),
+			"error": err.Error(),
 		})
 		return
 	}
 
-	toDate, err := time.Parse(DateLayout, req.ToDate)
+	toDate, err := parseDateValue(req.ToDate, "to_date")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("incorrect to_date format; expected %s", DateLayout),
+			"error": err.Error(),
 		})
 		return
 	}
 
-	paymentDate, err := time.Parse(DateLayout, req.PaymentDate)
+	paymentDate, err := parseDateValue(req.PaymentDate, "payment_date")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("incorrect payment_date format; expected %s", DateLayout),
+			"error": err.Error(),
 		})
 		return
 	}
-
 	createInput := &input.CreateWorkerPaymentInput{
 		WorkerID:      strings.TrimSpace(req.WorkerID),
-		FromDate:      fromDate,
-		ToDate:        toDate,
-		PaymentDate:   paymentDate,
+		FromDate:      *fromDate,
+		ToDate:        *toDate,
+		PaymentDate:   *paymentDate,
 		PaymentMethod: entity.PaymentMethod(req.PaymentMethod),
 		Reference:     strings.TrimSpace(req.Reference),
 		Remarks:       strings.TrimSpace(req.Remarks),
@@ -162,27 +161,23 @@ func (h *WorkerPaymentHandler) List(c *gin.Context) {
 		filter.Status = entity.PaymentStatus(value)
 	}
 
-	if value := c.Query(FromDate); value != "" {
-		date, err := time.Parse(DateLayout, value)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": fmt.Sprintf("incorrect from_date format; expected %s", DateLayout),
-			})
-			return
-		}
-		filter.FromDate = &date
+	fromDate, err := parseDate(c, FromDate)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
 	}
+	filter.FromDate = fromDate
 
-	if value := c.Query(ToDate); value != "" {
-		date, err := time.Parse(DateLayout, value)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": fmt.Sprintf("incorrect to_date format; expected %s", DateLayout),
-			})
-			return
-		}
-		filter.ToDate = &date
+	toDate, err := parseDate(c, ToDate)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
 	}
+	filter.ToDate = toDate
 
 	if filter.FromDate != nil &&
 		filter.ToDate != nil &&
@@ -192,7 +187,6 @@ func (h *WorkerPaymentHandler) List(c *gin.Context) {
 		})
 		return
 	}
-
 	if limit := c.Query(Limit); limit != "" {
 		value, err := strconv.Atoi(limit)
 		if err != nil || value <= 0 {
@@ -250,27 +244,23 @@ func (h *WorkerPaymentHandler) GetWorkerSummary(c *gin.Context) {
 		WorkerID: workerID,
 	}
 
-	if value := c.Query(FromDate); value != "" {
-		date, err := time.Parse(DateLayout, value)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": fmt.Sprintf("incorrect from_date format; expected %s", DateLayout),
-			})
-			return
-		}
-		filter.FromDate = &date
+	fromDate, err := parseDate(c, FromDate)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
 	}
+	filter.FromDate = fromDate
 
-	if value := c.Query(ToDate); value != "" {
-		date, err := time.Parse(DateLayout, value)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": fmt.Sprintf("incorrect to_date format; expected %s", DateLayout),
-			})
-			return
-		}
-		filter.ToDate = &date
+	toDate, err := parseDate(c, ToDate)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
 	}
+	filter.ToDate = toDate
 
 	if value := c.Query(Status); value != "" {
 		filter.Status = entity.PaymentStatus(value)
@@ -305,29 +295,23 @@ func (h *WorkerPaymentHandler) GetSummary(c *gin.Context) {
 		Status   = "status"
 	)
 	filter := input.WorkerPaymentSummaryFilter{}
-
-	if value := c.Query(FromDate); value != "" {
-		date, err := time.Parse(DateLayout, value)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": fmt.Sprintf("incorrect from_date format; expected %s", DateLayout),
-			})
-			return
-		}
-		filter.FromDate = &date
+	fromDate, err := parseDate(c, FromDate)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
 	}
+	filter.FromDate = fromDate
 
-	if value := c.Query(ToDate); value != "" {
-		date, err := time.Parse(DateLayout, value)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": fmt.Sprintf("incorrect to_date format; expected %s", DateLayout),
-			})
-			return
-		}
-		filter.ToDate = &date
+	toDate, err := parseDate(c, ToDate)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
 	}
-
+	filter.ToDate = toDate
 	if value := c.Query(Status); value != "" {
 		filter.Status = entity.PaymentStatus(value)
 	}
@@ -345,6 +329,8 @@ func (h *WorkerPaymentHandler) GetSummary(c *gin.Context) {
 	c.JSON(http.StatusOK, summary)
 }
 
+// LIST WORKER PAYMENT BALANCES
+
 func (h *WorkerPaymentHandler) ListWorkerBalances(c *gin.Context) {
 	organizationID := c.Param("organizationID")
 
@@ -356,12 +342,18 @@ func (h *WorkerPaymentHandler) ListWorkerBalances(c *gin.Context) {
 	}
 
 	const (
-		Search = "search"
-		Limit  = "limit"
-		Offset = "offset"
+		Search           = "search"
+		BundleID         = "bundle_id"
+		WorkerID         = "worker_id"
+		StyleID          = "style_id"
+		StyleOperationID = "style_operation_id"
+		FromDate         = "from_date"
+		ToDate           = "to_date"
+		Limit            = "limit"
+		Offset           = "offset"
 	)
 
-	limit := 10
+	limit := 20
 	if value := c.Query(Limit); value != "" {
 		parsed, err := strconv.Atoi(value)
 		if err != nil || parsed <= 0 {
@@ -385,10 +377,39 @@ func (h *WorkerPaymentHandler) ListWorkerBalances(c *gin.Context) {
 		offset = parsed
 	}
 
+	fromDate, err := parseDate(c, FromDate)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	toDate, err := parseDate(c, ToDate)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	if fromDate != nil && toDate != nil && fromDate.After(*toDate) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "from_date cannot be after to_date",
+		})
+		return
+	}
+
 	filter := input.WorkerPaymentBalanceFilter{
-		Search: c.Query(Search),
-		Limit:  limit,
-		Offset: offset,
+		Search:           c.Query(Search),
+		BundleID:         c.Query(BundleID),
+		WorkerID:         c.Query(WorkerID),
+		StyleID:          c.Query(StyleID),
+		StyleOperationID: c.Query(StyleOperationID),
+		FromDate:         fromDate,
+		ToDate:           toDate,
+		Limit:            limit,
+		Offset:           offset,
 	}
 
 	balances, err := h.payments.ListWorkerBalances(
@@ -431,8 +452,6 @@ func (h *WorkerPaymentHandler) Void(c *gin.Context) {
 	})
 }
 
-
-
 func (h *WorkerPaymentHandler) Export(c *gin.Context) {
 	organizationID := c.Param("organizationID")
 
@@ -443,8 +462,15 @@ func (h *WorkerPaymentHandler) Export(c *gin.Context) {
 		return
 	}
 
+	const (
+		FromDate = "from_date"
+		ToDate   = "to_date"
+		Format   = "format"
+		WorkerID = "worker_id"
+	)
+
 	format := strings.ToLower(
-		strings.TrimSpace(c.DefaultQuery("format", "xlsx")),
+		strings.TrimSpace(c.DefaultQuery(Format, "xlsx")),
 	)
 
 	if format != "pdf" && format != "xlsx" && format != "csv" {
@@ -455,7 +481,7 @@ func (h *WorkerPaymentHandler) Export(c *gin.Context) {
 	}
 
 	filter := input.WorkerPaymentFilter{
-		WorkerID: strings.TrimSpace(c.Query("worker_id")),
+		WorkerID: strings.TrimSpace(c.Query(WorkerID)),
 		Limit:    100,
 		Offset:   0,
 	}
@@ -464,35 +490,19 @@ func (h *WorkerPaymentHandler) Export(c *gin.Context) {
 		filter.Status = entity.PaymentStatus(value)
 	}
 
-	if value := c.Query("from_date"); value != "" {
-		date, err := time.Parse(DateLayout, value)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": fmt.Sprintf(
-					"incorrect from_date format; expected %s",
-					DateLayout,
-				),
-			})
-			return
-		}
-
-		filter.FromDate = &date
+	fromDate, err := parseDate(c, FromDate)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
+	filter.FromDate = fromDate
 
-	if value := c.Query("to_date"); value != "" {
-		date, err := time.Parse(DateLayout, value)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": fmt.Sprintf(
-					"incorrect to_date format; expected %s",
-					DateLayout,
-				),
-			})
-			return
-		}
-
-		filter.ToDate = &date
+	toDate, err := parseDate(c, ToDate)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
+	filter.ToDate = toDate
 
 	if filter.FromDate != nil &&
 		filter.ToDate != nil &&
@@ -503,17 +513,16 @@ func (h *WorkerPaymentHandler) Export(c *gin.Context) {
 		return
 	}
 
-	// Fetch all matching payments.
 	const batchSize = 100
 
-	payments := make([]*output.WorkerPayment, 0)
+	payments := make([]*output.SlimWorkerPayment, 0)
 	offset := 0
 
 	for {
 		filter.Limit = batchSize
 		filter.Offset = offset
 
-		batch, err := h.payments.List(
+		result, err := h.payments.List(
 			c.Request.Context(),
 			organizationID,
 			filter,
@@ -523,16 +532,19 @@ func (h *WorkerPaymentHandler) Export(c *gin.Context) {
 			return
 		}
 
-		payments = append(payments, batch...)
+		if result == nil || len(result.Payments) == 0 {
+			break
+		}
 
-		if len(batch) < batchSize {
+		payments = append(payments, result.Payments...)
+
+		if len(result.Payments) < batchSize {
 			break
 		}
 
 		offset += batchSize
 	}
 
-	// Build export data.
 	data := exports.BuildWorkerPayments(payments)
 
 	data.Filename = fmt.Sprintf(
@@ -540,7 +552,6 @@ func (h *WorkerPaymentHandler) Export(c *gin.Context) {
 		time.Now().Format("20060102-150405"),
 	)
 
-	// Generate file.
 	content, contentType, err := exporter.Render(format, data)
 	if err != nil {
 		writeError(c, err)
@@ -554,4 +565,111 @@ func (h *WorkerPaymentHandler) Export(c *gin.Context) {
 	)
 
 	c.Data(http.StatusOK, contentType, content)
+}
+
+func (h *WorkerPaymentHandler) ExportPendingBalances(c *gin.Context) {
+	organizationID := c.Param("organizationID")
+	if organizationID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "organization id is required",
+		})
+		return
+	}
+
+	format := strings.ToLower(strings.TrimSpace(c.DefaultQuery("format", "xlsx")))
+
+	switch format {
+	case "xlsx", "csv", "pdf":
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "unsupported export format",
+		})
+		return
+	}
+
+	fromDate, err := parseDate(c, "from_date")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	toDate, err := parseDate(c, "to_date")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if fromDate != nil && toDate != nil && toDate.Before(*fromDate) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "to_date must be on or after from_date",
+		})
+		return
+	}
+
+	// Use an exclusive upper bound so the entire to_date is included.
+	if toDate != nil {
+		endDate := toDate.AddDate(0, 0, 1)
+		toDate = &endDate
+	}
+
+	filter := input.WorkerPaymentBalanceFilter{
+		Search:           c.Query("search"),
+		BundleID:         c.Query("bundle_id"),
+		WorkerID:         c.Query("worker_id"),
+		StyleID:          c.Query("style_id"),
+		StyleOperationID: c.Query("style_operation_id"),
+		FromDate:         fromDate,
+		ToDate:           toDate,
+		Limit:            100,
+		Offset:           0,
+	}
+
+	workers := make([]*output.WorkerPaymentBalance, 0)
+
+	for {
+		result, err := h.payments.ListWorkerBalances(
+			c.Request.Context(),
+			organizationID,
+			filter,
+		)
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+
+		if result == nil || len(result.Workers) == 0 {
+			break
+		}
+
+		workers = append(workers, result.Workers...)
+
+		if len(result.Workers) < filter.Limit {
+			break
+		}
+
+		filter.Offset += filter.Limit
+	}
+
+	data := exports.BuildPendingWorkerBalances(workers)
+
+	filename := fmt.Sprintf(
+		"pending-worker-payments-%s",
+		time.Now().Format("20060102-150405"),
+	)
+
+	data.Filename = filename
+
+	file, contentType, err := exporter.Render(format, data)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
+	c.Header("Content-Type", contentType)
+	c.Header(
+		"Content-Disposition",
+		fmt.Sprintf(`attachment; filename="%s.%s"`, filename, format),
+	)
+
+	c.Data(http.StatusOK, contentType, file)
 }

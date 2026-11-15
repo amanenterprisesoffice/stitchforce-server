@@ -739,41 +739,91 @@ func (r *Repository) UpdateWithBundleLimit(
 // =========================================
 // SOFT DELETE
 // =========================================
-
 func (r *Repository) Delete(
 	ctx context.Context,
 	organizationID string,
 	id string,
 ) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin delete production entry transaction: %w", err)
+	}
+	defer tx.Rollback()
 
-	query := `
-		UPDATE production_entries
-		SET
-			deleted_at = NOW(),
-			updated_at = NOW()
-		WHERE id = $1
-		  AND organization_id = $2
-		  AND deleted_at IS NULL
-	`
+	// Lock the production entry to prevent concurrent payment allocations.
+	var entryID string
 
-	result, err := r.db.ExecContext(
+	err = tx.QueryRowContext(
 		ctx,
-		query,
+		`
+			SELECT id
+			FROM production_entries
+			WHERE id = $1
+			  AND organization_id = $2
+			  AND deleted_at IS NULL
+			FOR UPDATE
+		`,
+		id,
+		organizationID,
+	).Scan(&entryID)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return repo.ErrNotFound
+		}
+		return fmt.Errorf("get production entry: %w", err)
+	}
+
+	// Check how much has actually been paid through completed payments.
+	var paidAmount int64
+
+	err = tx.QueryRowContext(
+		ctx,
+		`
+			SELECT COALESCE(SUM(wpa.amount), 0)
+			FROM worker_payment_allocations wpa
+			INNER JOIN worker_payments wp
+				ON wp.id = wpa.worker_payment_id
+				AND wp.organization_id = wpa.organization_id
+			WHERE wpa.production_entry_id = $1
+			  AND wpa.organization_id = $2
+			  AND wp.status = $3
+		`,
+		id,
+		organizationID,
+		entity.PaymentStatusCompleted,
+	).Scan(&paidAmount)
+
+	if err != nil {
+		return fmt.Errorf("check production entry payments: %w", err)
+	}
+
+	if paidAmount > 0 {
+		return errors.New("cannot delete production entry because it has completed payments")
+	}
+
+	// Soft-delete the production entry.
+	_, err = tx.ExecContext(
+		ctx,
+		`
+			UPDATE production_entries
+			SET
+				deleted_at = NOW(),
+				updated_at = NOW()
+			WHERE id = $1
+			  AND organization_id = $2
+			  AND deleted_at IS NULL
+		`,
 		id,
 		organizationID,
 	)
 
 	if err != nil {
-		return err
+		return fmt.Errorf("delete production entry: %w", err)
 	}
 
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if affected == 0 {
-		return repo.ErrNotFound
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit delete production entry transaction: %w", err)
 	}
 
 	return nil

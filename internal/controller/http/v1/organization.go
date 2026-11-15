@@ -2,10 +2,8 @@ package v1
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -104,14 +102,16 @@ func (h *OrganizationHandler) Update(c *gin.Context) {
 	}
 
 	updateInput := &input.UpdateOrganizationInput{
-		Name:         req.Name,
-		AddressLine1: req.AddressLine1,
-		AddressLine2: req.AddressLine2,
-		City:         req.City,
-		State:        req.State,
-		PostalCode:   req.PostalCode,
-		Country:      req.Country,
-		Photo:        photo,
+		Name:                  req.Name,
+		AddressLine1:          req.AddressLine1,
+		AddressLine2:          req.AddressLine2,
+		City:                  req.City,
+		State:                 req.State,
+		PostalCode:            req.PostalCode,
+		Country:               req.Country,
+		Photo:                 photo,
+		DashboardAlertEnabled: req.DashboardAlertEnabled,
+		DashboardAlertEmail:   req.DashboardAlertEmail,
 	}
 
 	if err := h.organizations.Update(
@@ -202,32 +202,31 @@ func (h *OrganizationHandler) GetDashboardTrend(c *gin.Context) {
 		return
 	}
 
-	fromDate, err := time.Parse(DateLayout, fromDateValue)
+	fromDate, err := parseDate(c, "from_date")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("from_date must be in %s format", DateLayout),
+			"error": err.Error(),
 		})
 		return
 	}
 
-	toDate, err := time.Parse(DateLayout, toDateValue)
+	toDate, err := parseDate(c, "to_date")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("to_date must be in %s format", DateLayout),
+			"error": err.Error(),
 		})
 		return
 	}
 
-	if toDate.Before(fromDate) {
+	if fromDate != nil && toDate != nil && toDate.Before(*fromDate) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "to_date cannot be before from_date",
 		})
 		return
 	}
-
 	filter := input.DashboardFilter{
-		FromDate: fromDate,
-		ToDate:   toDate,
+		FromDate: *fromDate,
+		ToDate:   *toDate,
 		GroupBy:  groupBy,
 	}
 

@@ -169,32 +169,36 @@ func (h *ProductionEntryHandler) List(c *gin.Context) {
 	}
 
 	// Parse from_date.
-	if value := c.Query(FromDate); value != "" {
-		date, err := time.Parse(DateLayout, value)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": fmt.Sprintf("invalid from_date; expected %s", DateLayout),
-			})
-			return
-		}
-
-		filter.FromDate = &date
+	fromDate, err := parseDate(c, FromDate)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
 	}
+	filter.FromDate = fromDate
 
 	// Parse to_date (inclusive).
-	if value := c.Query(ToDate); value != "" {
-		date, err := time.Parse(DateLayout, value)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": fmt.Sprintf("invalid to_date; expected %s", DateLayout),
-			})
-			return
-		}
-
-		date = date.AddDate(0, 0, 1)
-		filter.ToDate = &date
+	toDate, err := parseDate(c, ToDate)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
 	}
 
+	if toDate != nil {
+		endDate := toDate.AddDate(0, 0, 1)
+		filter.ToDate = &endDate
+	}
+
+	// Validate date range.
+	if filter.FromDate != nil && toDate != nil && toDate.Before(*filter.FromDate) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "to_date cannot be before from_date",
+		})
+		return
+	}
 	entries, err := h.productionEntries.List(
 		c.Request.Context(),
 		organizationID,
@@ -310,30 +314,26 @@ func (h *ProductionEntryHandler) Export(c *gin.Context) {
 		StyleID:          c.Query("style_id"),
 		StyleOperationID: c.Query("style_operation_id"),
 	}
+	fromDate, err := parseDate(c, "from_date")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	filter.FromDate = fromDate
 
-	if value := c.Query("from_date"); value != "" {
-		date, err := time.Parse(DateLayout, value)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": fmt.Sprintf("invalid from_date; expected %s", DateLayout),
-			})
-			return
-		}
-
-		filter.FromDate = &date
+	toDate, err := parseDate(c, "to_date")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
 	}
 
-	if value := c.Query("to_date"); value != "" {
-		date, err := time.Parse(DateLayout, value)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": fmt.Sprintf("invalid to_date; expected %s", DateLayout),
-			})
-			return
-		}
-
-		date = date.AddDate(0, 0, 1)
-		filter.ToDate = &date
+	if toDate != nil {
+		endDate := toDate.AddDate(0, 0, 1)
+		filter.ToDate = &endDate
 	}
 
 	// Fetch all matching entries in batches.

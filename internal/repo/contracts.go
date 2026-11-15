@@ -41,6 +41,10 @@ type OrganizationRepository interface {
 		organizationID string,
 		filter input.DashboardFilter,
 	) (*output.OrganizationDashboard, error)
+
+	
+	ListDashboardAlertOrganizations(context.Context) ([]*entity.Organization, error)
+	UpdateDashboardAlertLastSent(context.Context, string, time.Time) error
 }
 
 type OrganizationInvitationRepository interface {
@@ -59,6 +63,7 @@ type UserRepository interface {
 	List(context.Context, string, input.UserFilter) ([]*entity.User, error)
 	Update(context.Context, *entity.User) error
 	Delete(context.Context, string) error
+
 	RegisterOrganization(
 		context.Context,
 		*entity.Organization,
@@ -66,16 +71,44 @@ type UserRepository interface {
 	) error
 
 	CreateEmailVerificationToken(
-		ctx context.Context,
-		userID string,
-		tokenHash string,
-		expiresAt time.Time,
+		context.Context,
+		string,
+		string,
+		time.Time,
 	) error
 
 	VerifyEmail(
-		ctx context.Context,
-		tokenHash string,
+		context.Context,
+		string,
 	) error
+
+	CreatePasswordResetToken(
+		context.Context,
+		string,
+		string,
+		time.Time,
+	) error
+
+	ResetPassword(
+		context.Context,
+		string,
+		string,
+	) (*entity.User, error)
+}
+
+type UserSessionRepository interface {
+	CreateWithLimit(
+		ctx context.Context,
+		session *entity.UserSession,
+		maxSessions int,
+	) error
+
+	GetByID(ctx context.Context, id string) (*entity.UserSession, error)
+	GetActive(ctx context.Context, id string) (*entity.UserSession, error)
+
+	Revoke(ctx context.Context, id string) error
+	RevokeAll(ctx context.Context, userID string) error
+	RevokeOrganizationSessions(ctx context.Context, organizationID string) error
 }
 
 type StyleRepository interface {
@@ -253,7 +286,7 @@ type WorkerPaymentRepository interface {
 		context.Context,
 		string, // organizationID
 		input.WorkerPaymentFilter,
-	) ([]*output.WorkerPayment, error)
+	) (*output.WorkerPaymentList, error)
 
 	GetSummary(
 		context.Context,
@@ -265,7 +298,7 @@ type WorkerPaymentRepository interface {
 		ctx context.Context,
 		organizationID string,
 		filter input.WorkerPaymentBalanceFilter,
-	) ([]*output.WorkerPaymentBalance, error)
+	) (*output.WorkerPaymentBalanceList, error)
 
 	Void(
 		context.Context,

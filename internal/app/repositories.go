@@ -12,12 +12,14 @@ import (
 	stylerepo "stitchforce-server/internal/repo/postgres/style"
 	styleopsrepo "stitchforce-server/internal/repo/postgres/styleoperation"
 	userrepo "stitchforce-server/internal/repo/postgres/user"
+	usersessionrepo "stitchforce-server/internal/repo/postgres/usersession"
 	workerpaymentrepo "stitchforce-server/internal/repo/postgres/workerpayment"
 	"stitchforce-server/pkg/postgres"
 )
 
 type Repositories struct {
 	Users           repo.UserRepository
+	Sessions        repo.UserSessionRepository
 	GarmentWorkers  repo.GarmentWorkerRepository
 	Organizations   repo.OrganizationRepository
 	Invitations     repo.OrganizationInvitationRepository
@@ -33,6 +35,7 @@ type Repositories struct {
 func NewRepositories(database *postgres.Client) Repositories {
 	return Repositories{
 		Users:           userrepo.New(database.DB),
+		Sessions:        usersessionrepo.New(database.DB),
 		GarmentWorkers:  garmentworkerrepo.New(database.DB),
 		Organizations:    organizationrepo.New(database.DB),
 		Invitations:     organizationinvitationrepo.New(database.DB),

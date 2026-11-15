@@ -17,8 +17,15 @@ type User struct {
 	EmailVerificationTokenHash   string     `json:"-" db:"email_verification_token_hash"`
 	EmailVerificationTokenExpiry *time.Time `json:"-" db:"email_verification_expires_at"`
 
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	PasswordResetTokenHash   string     `json:"-" db:"password_reset_token_hash"`
+	PasswordResetTokenExpiry *time.Time `json:"-" db:"password_reset_token_expires_at"`
+
+	CreatedAt time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at" db:"updated_at"`
+	DeletedAt *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
+
+
+	MaxSessions int `json:"max_sessions" db:"max_sessions" form:"max_sessions"`
 }
 
 type UserRole string

@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"stitchforce-server/config"
 	"stitchforce-server/internal/authorization"
 	"stitchforce-server/internal/controller/http/middleware"
 	"stitchforce-server/internal/usecase"
@@ -12,6 +13,7 @@ import (
 )
 
 func NewRouter(
+	cfg config.Config,
 	users usecase.UserUseCase,
 	garmentWorkers usecase.GarmentWorkerUseCase,
 	organizationUseCase usecase.OrganizationUseCase,
@@ -43,7 +45,7 @@ func NewRouter(
 		})
 	})
 	organizationHandler := NewOrganizationHandler(organizationUseCase, validate)
-	userHandler := NewUserHandler(users, validate, jwtManager)
+	userHandler := NewUserHandler(users, cfg.App, validate, jwtManager)
 	styleHandler := NewStyleHandler(styleUseCase, validate)
 	styleOperationHandler := NewStyleOperationHandler(styleOperationUseCase, validate)
 	sizeHandler := NewSizeHandler(sizeUseCase, validate)
@@ -52,8 +54,16 @@ func NewRouter(
 	productionEntryHandler := NewProductionEntryHandler(productionEntryUseCase, validate)
 	workerPaymentHandler := NewWorkerPaymentHandler(workerPaymentUseCase, validate)
 	licenseHandler := NewLicenseHandler(licenseUseCase, validate)
+	cronHandler := NewCronHandler(organizationUseCase, validate)
 	v1 := r.Group("/v1")
 	{
+
+		cron := v1.Group("cron")
+		cron.Use(middleware.VerifyCronSecret(cfg.Vercel))
+		{
+			cron.GET("/dashboard-alerts", cronHandler.SendDashboardAlerts)
+		}
+
 		auth := v1.Group("/auth")
 		{
 			auth.POST("/register", userHandler.Register)
@@ -61,19 +71,27 @@ func NewRouter(
 			auth.POST("/logout", userHandler.Logout)
 			auth.POST("/verify-email", userHandler.VerifyEmail)
 			auth.POST("/accept-invitation", organizationHandler.AcceptInvitation)
+			auth.POST("/forgot-password", userHandler.ForgotPassword)
+			auth.POST("/reset-password", userHandler.ResetPassword)
 		}
 
 		protected := v1.Group("")
-		protected.Use(middleware.Auth(jwtManager))
+		protected.Use(middleware.Auth(jwtManager, users, cfg.App))
 		{
 			usersRoute := protected.Group("/users")
 			{
 				usersRoute.GET("/me", userHandler.GetMe)
-				usersRoute.PATCH("/me", userHandler.Update)
+				usersRoute.PATCH("/me", userHandler.UpdateMe)
+				usersRoute.DELETE("/me", userHandler.DeleteMe)
 
 				usersRoute.GET("/:id",
 					middleware.RequirePermission(authorization.PermissionUsersView),
 					userHandler.Get,
+				)
+
+				usersRoute.PATCH("/:id",
+					middleware.RequirePermission(authorization.PermissionUsersManage),
+					userHandler.Update,
 				)
 				usersRoute.DELETE("/:id",
 					middleware.RequirePermission(authorization.PermissionUsersManage),
@@ -194,22 +212,22 @@ func NewRouter(
 					sizes := licensed.Group("/sizes")
 					{
 						view := sizes.Group("")
-						view.Use(middleware.RequirePermission(authorization.PermissionStylesView))
+						view.Use(middleware.RequirePermission(authorization.PermissionSizesView))
 						{
 							view.GET("", sizeHandler.List)
 							view.GET("/:id", sizeHandler.Get)
 						}
 
 						create := sizes.Group("")
-						create.Use(middleware.RequirePermission(authorization.PermissionStylesCreate))
+						create.Use(middleware.RequirePermission(authorization.PermissionSizesCreate))
 						create.POST("", sizeHandler.Create)
 
 						update := sizes.Group("")
-						update.Use(middleware.RequirePermission(authorization.PermissionStylesUpdate))
+						update.Use(middleware.RequirePermission(authorization.PermissionSizesUpdate))
 						update.PUT("/:id", sizeHandler.Update)
 
 						delete := sizes.Group("")
-						delete.Use(middleware.RequirePermission(authorization.PermissionStylesDelete))
+						delete.Use(middleware.RequirePermission(authorization.PermissionSizesDelete))
 						delete.DELETE("/:id", sizeHandler.Delete)
 					}
 
@@ -264,21 +282,22 @@ func NewRouter(
 					workerPayments := licensed.Group("/worker-payments")
 					{
 						view := workerPayments.Group("")
-						view.Use(middleware.RequirePermission(authorization.PermissionProductionView))
+						view.Use(middleware.RequirePermission(authorization.PermissionPaymentsView))
 						{
 							view.GET("/balances", workerPaymentHandler.ListWorkerBalances)
 							view.GET("/summary", workerPaymentHandler.GetSummary)
 							view.GET("", workerPaymentHandler.List)
 							view.GET("/export", workerPaymentHandler.Export)
+							view.GET("/balances/export", workerPaymentHandler.ExportPendingBalances)
 							view.GET("/:id", workerPaymentHandler.Get)
 						}
 
 						create := workerPayments.Group("")
-						create.Use(middleware.RequirePermission(authorization.PermissionProductionCreate))
+						create.Use(middleware.RequirePermission(authorization.PermissionPaymentsCreate))
 						create.POST("", workerPaymentHandler.Create)
 
 						update := workerPayments.Group("")
-						update.Use(middleware.RequirePermission(authorization.PermissionProductionUpdate))
+						update.Use(middleware.RequirePermission(authorization.PermissionPaymentsUpdate))
 						update.PATCH("/:id/void", workerPaymentHandler.Void)
 					}
 

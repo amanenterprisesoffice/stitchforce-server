@@ -21,7 +21,16 @@ CREATE TABLE organizations (
     license_expires_at TIMESTAMPTZ,
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    dashboard_alert_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    dashboard_alert_email VARCHAR(255) NOT NULL DEFAULT '',
+    dashboard_alert_schedule JSONB NOT NULL
+        DEFAULT '{
+            "frequency": "daily",
+            "time": "09:00",
+            "timezone": "Asia/Kolkata"
+        }'::jsonb
+    dashboard_alert_last_sent_at TIMESTAMPTZ DEFAULT NULL
 );
 
 -- =========================================
@@ -46,15 +55,26 @@ CREATE TABLE users (
     email_verification_token_hash TEXT,
     email_verification_expires_at TIMESTAMPTZ,
 
+    password_reset_token_hash TEXT NOT NULL DEFAULT '',
+    password_reset_token_expires_at TIMESTAMPTZ DEFAULT NULL,
+
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ DEFAULT NULL,
 
-    UNIQUE (organization_id, email),
+
+    max_sessions INTEGER NOT NULL DEFAULT 1
+        CHECK (max_sessions >= 1),
+
     UNIQUE (id, organization_id)
 );
 
 CREATE INDEX idx_users_organization_id
     ON users(organization_id);
+
+CREATE UNIQUE INDEX uq_users_organization_email_active
+    ON users(organization_id, email)
+    WHERE deleted_at IS NULL;
 
 
 -- =========================================
@@ -239,9 +259,8 @@ CREATE TABLE bundles (
 
 -- Bundle number must be unique within an organization.
 -- Deleted bundle numbers can be reused.
-
-CREATE UNIQUE INDEX uq_bundles_organization_number
-    ON bundles(organization_id, bundle_number)
+CREATE UNIQUE INDEX uq_bundles_organization_style_number
+    ON bundles(organization_id, style_id, bundle_number)
     WHERE deleted_at IS NULL;
 
 CREATE INDEX idx_bundles_organization_id
@@ -498,6 +517,35 @@ CREATE TABLE organization_invitations (
 
 CREATE INDEX idx_organization_invitations_token
     ON organization_invitations(token_hash);
+
+
+
+CREATE TABLE user_sessions (
+    id TEXT PRIMARY KEY,
+
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+
+    device_name VARCHAR(255) NOT NULL DEFAULT '',
+    ip_address VARCHAR(45) NOT NULL DEFAULT '',
+    user_agent TEXT NOT NULL DEFAULT '',
+
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_used_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_user_sessions_user_id
+ON user_sessions(user_id);
+
+CREATE INDEX idx_user_sessions_organization_id
+ON user_sessions(organization_id);
+
+CREATE INDEX idx_user_sessions_active
+ON user_sessions(user_id, created_at DESC)
+WHERE revoked_at IS NULL;
     
 -- =========================================
 -- END OF SCHEMA

@@ -11,6 +11,7 @@ type User struct {
 	Name            string          `json:"name"`
 	Email           string          `json:"email"`
 	Role            entity.UserRole `json:"role"`
+	Permissions     []string        `json:"permissions"`
 	PhotoURL        *string         `json:"photo_url,omitempty"`
 	EmailVerifiedAt *time.Time      `json:"email_verified_at,omitempty"`
 	CreatedAt       time.Time       `json:"created_at"`

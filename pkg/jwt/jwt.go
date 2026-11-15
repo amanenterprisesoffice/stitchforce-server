@@ -13,6 +13,8 @@ type Claims struct {
 	UserID         string `json:"user_id"`
 	Role           string `json:"role"`
 	OrganizationID string `json:"organization_id"`
+	SessionID      string `json:"session_id"`
+
 	jwtv5.RegisteredClaims
 }
 
@@ -26,12 +28,16 @@ func New(secret, issuer string, ttl time.Duration) *Manager {
 	return &Manager{secret: []byte(secret), ttl: ttl, issuer: issuer}
 }
 
-func (m *Manager) Generate(userID, role, organizationID string) (string, error) {
+func (m *Manager) Generate(
+	userID, role, organizationID, sessionID string,
+) (string, error) {
 	now := time.Now()
+
 	claims := Claims{
 		UserID:         userID,
 		Role:           role,
 		OrganizationID: organizationID,
+		SessionID:      sessionID,
 		RegisteredClaims: jwtv5.RegisteredClaims{
 			Issuer:    m.issuer,
 			Subject:   userID,
@@ -39,7 +45,11 @@ func (m *Manager) Generate(userID, role, organizationID string) (string, error) 
 			ExpiresAt: jwtv5.NewNumericDate(now.Add(m.ttl)),
 		},
 	}
-	return jwtv5.NewWithClaims(jwtv5.SigningMethodHS256, claims).SignedString(m.secret)
+
+	return jwtv5.NewWithClaims(
+		jwtv5.SigningMethodHS256,
+		claims,
+	).SignedString(m.secret)
 }
 
 func (m *Manager) Parse(tokenString string) (*Claims, error) {

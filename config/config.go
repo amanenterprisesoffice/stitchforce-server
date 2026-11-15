@@ -18,12 +18,14 @@ type Config struct {
 	Storage  StorageConfig
 	Resend   ResendConfig
 	Frontend FrontendConfig
+	Vercel   VercelConfig
 }
 
 type (
 	AppConfig struct {
 		Name            string
 		Port            string
+		Env             string
 		ShutdownTimeout time.Duration
 	}
 
@@ -62,6 +64,9 @@ type (
 	FrontendConfig struct {
 		URL string
 	}
+	VercelConfig struct {
+		CronSecret string
+	}
 )
 
 func Load() Config {
@@ -73,6 +78,7 @@ func Load() Config {
 		App: AppConfig{
 			Name:            env("APP_NAME", "stitchforce-server"),
 			Port:            env("PORT", "8080"),
+			Env:             env("APP_ENV", "development"),
 			ShutdownTimeout: durationEnv("APP_SHUTDOWN_TIMEOUT", 10*time.Second),
 		},
 		Postgres: PostgresConfig{
@@ -105,6 +111,9 @@ func Load() Config {
 		},
 		Frontend: FrontendConfig{
 			URL: strings.TrimRight(env("FRONTEND_URL", ""), "/"),
+		},
+		Vercel: VercelConfig{
+			CronSecret: env("CRON_SECRET", ""),
 		},
 	}
 }

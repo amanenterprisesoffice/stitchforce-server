@@ -25,6 +25,7 @@ func NewServer(
 	jwtManager *jwt.Manager,
 ) *Server {
 	router := httpv1.NewRouter(
+		cfg,
 		useCases.Users,
 		useCases.GarmentWorkers,
 		useCases.Organizations,

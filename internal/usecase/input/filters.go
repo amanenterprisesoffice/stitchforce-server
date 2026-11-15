@@ -89,9 +89,18 @@ type WorkerPaymentFilter struct {
 }
 
 type WorkerPaymentBalanceFilter struct {
-	Search string
-	Limit  int
-	Offset int
+    Search string
+
+    BundleID         string
+    WorkerID         string
+    StyleID          string
+    StyleOperationID string
+
+    FromDate *time.Time
+    ToDate   *time.Time
+
+    Limit  int
+    Offset int
 }
 
 type WorkerPaymentSummaryFilter struct {

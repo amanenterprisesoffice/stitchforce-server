@@ -455,12 +455,80 @@ func (r *WorkerPaymentRepository) List(
 	ctx context.Context,
 	organizationID string,
 	filter input.WorkerPaymentFilter,
-) ([]*output.WorkerPayment, error) {
+) (*output.WorkerPaymentList, error) {
 
-	query := `
+	where := `WHERE wp.organization_id = $1`
+
+	args := []any{organizationID}
+	argPosition := 2
+
+	if filter.WorkerID != "" {
+		where += fmt.Sprintf(" AND wp.worker_id = $%d", argPosition)
+		args = append(args, filter.WorkerID)
+		argPosition++
+	}
+
+	if filter.Status != "" {
+		where += fmt.Sprintf(" AND wp.status = $%d", argPosition)
+		args = append(args, filter.Status)
+		argPosition++
+	}
+
+	if filter.FromDate != nil {
+		where += fmt.Sprintf(" AND wp.payment_date >= $%d", argPosition)
+		args = append(args, *filter.FromDate)
+		argPosition++
+	}
+
+	if filter.ToDate != nil {
+		where += fmt.Sprintf(" AND wp.payment_date < $%d", argPosition)
+		args = append(args, filter.ToDate.AddDate(0, 0, 1))
+		argPosition++
+	}
+
+	result := &output.WorkerPaymentList{
+		Payments: make([]*output.SlimWorkerPayment, 0),
+	}
+
+	// Summary
+	summaryQuery := fmt.Sprintf(`
+		SELECT
+			COUNT(*),
+			COALESCE(SUM(wp.amount), 0),
+			COUNT(*) FILTER (
+				WHERE wp.status = $%d
+			),
+			COALESCE(
+				SUM(wp.amount) FILTER (
+					WHERE wp.status = $%d
+				),
+				0
+			)
+		FROM worker_payments wp
+		%s
+	`, argPosition, argPosition, where)
+
+	summaryArgs := append([]any{}, args...)
+	summaryArgs = append(summaryArgs, entity.PaymentStatusCompleted)
+
+	err := r.db.QueryRowContext(
+		ctx,
+		summaryQuery,
+		summaryArgs...,
+	).Scan(
+		&result.Summary.TotalPayments,
+		&result.Summary.TotalAmount,
+		&result.Summary.CompletedPayments,
+		&result.Summary.CompletedAmount,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get worker payment summary: %w", err)
+	}
+
+	// Paginated payment list
+	query := fmt.Sprintf(`
 		SELECT
 			wp.id,
-			wp.organization_id,
 			wp.worker_id,
 			wp.amount,
 			wp.payment_date,
@@ -469,7 +537,6 @@ func (r *WorkerPaymentRepository) List(
 			wp.remarks,
 			wp.status,
 			wp.created_at,
-			wp.updated_at,
 
 			gw.id,
 			gw.name,
@@ -482,72 +549,26 @@ func (r *WorkerPaymentRepository) List(
 			ON gw.id = wp.worker_id
 			AND gw.organization_id = wp.organization_id
 
-		WHERE wp.organization_id = $1
-	`
+		%s
 
-	args := []any{organizationID}
-	argPosition := 2
-
-	if filter.WorkerID != "" {
-		query += fmt.Sprintf(
-			" AND wp.worker_id = $%d",
-			argPosition,
-		)
-		args = append(args, filter.WorkerID)
-		argPosition++
-	}
-
-	if filter.Status != "" {
-		query += fmt.Sprintf(
-			" AND wp.status = $%d",
-			argPosition,
-		)
-		args = append(args, filter.Status)
-		argPosition++
-	}
-
-	if filter.FromDate != nil {
-		query += fmt.Sprintf(
-			" AND wp.payment_date >= $%d",
-			argPosition,
-		)
-		args = append(args, *filter.FromDate)
-		argPosition++
-	}
-
-	if filter.ToDate != nil {
-		query += fmt.Sprintf(
-			" AND wp.payment_date < $%d",
-			argPosition,
-		)
-		args = append(args, filter.ToDate.AddDate(0, 0, 1))
-		argPosition++
-	}
-
-	limit := filter.Limit
-	offset := filter.Offset
-
-	query += fmt.Sprintf(`
 		ORDER BY wp.payment_date DESC, wp.created_at DESC
 		LIMIT $%d OFFSET $%d
-	`, argPosition, argPosition+1)
+	`, where, argPosition, argPosition+1)
 
-	args = append(args, limit, offset)
+	listArgs := append([]any{}, args...)
+	listArgs = append(listArgs, filter.Limit, filter.Offset)
 
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := r.db.QueryContext(ctx, query, listArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("list worker payments: %w", err)
 	}
 	defer rows.Close()
 
-	payments := make([]*output.WorkerPayment, 0)
-
 	for rows.Next() {
-		payment := &output.WorkerPayment{}
+		payment := &output.SlimWorkerPayment{}
 
 		if err := rows.Scan(
 			&payment.ID,
-			&payment.OrganizationID,
 			&payment.WorkerID,
 			&payment.Amount,
 			&payment.PaymentDate,
@@ -556,7 +577,6 @@ func (r *WorkerPaymentRepository) List(
 			&payment.Remarks,
 			&payment.Status,
 			&payment.CreatedAt,
-			&payment.UpdatedAt,
 
 			&payment.Worker.ID,
 			&payment.Worker.Name,
@@ -566,16 +586,15 @@ func (r *WorkerPaymentRepository) List(
 			return nil, fmt.Errorf("scan worker payment: %w", err)
 		}
 
-		payments = append(payments, payment)
+		result.Payments = append(result.Payments, payment)
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate worker payments: %w", err)
 	}
 
-	return payments, nil
+	return result, nil
 }
-
 // GET WORKER PAYMENT SUMMARY
 func (r *WorkerPaymentRepository) GetSummary(
 	ctx context.Context,
@@ -683,142 +702,216 @@ func (r *WorkerPaymentRepository) GetSummary(
 
 
 // LIST WORKER PAYMENT BALANCES
-
-// LIST WORKER PAYMENT BALANCES
-
 func (r *WorkerPaymentRepository) ListWorkerBalances(
-	ctx context.Context,
-	organizationID string,
-	filter input.WorkerPaymentBalanceFilter,
-) ([]*output.WorkerPaymentBalance, error) {
+    ctx context.Context,
+    organizationID string,
+    filter input.WorkerPaymentBalanceFilter,
+) (*output.WorkerPaymentBalanceList, error) {
 
-	query := `
-		WITH entry_balances AS (
-			SELECT
-				pe.id,
-				pe.worker_id,
-				pe.total_amount,
+    result := &output.WorkerPaymentBalanceList{
+        Workers: make([]*output.WorkerPaymentBalance, 0),
+    }
 
-				COALESCE(
-					(
-						SELECT SUM(wpa.amount)
-						FROM worker_payment_allocations wpa
+    baseQuery := `
+        WITH entry_balances AS (
+            SELECT
+                pe.id,
+                pe.worker_id,
+                pe.total_amount,
 
-						INNER JOIN worker_payments wp
-							ON wp.id = wpa.worker_payment_id
-							AND wp.organization_id = wpa.organization_id
+                COALESCE(
+                    (
+                        SELECT SUM(wpa.amount)
+                        FROM worker_payment_allocations wpa
 
-						WHERE wpa.organization_id = pe.organization_id
-							AND wpa.production_entry_id = pe.id
-							AND wp.status = $2
-					),
-					0
-				) AS paid_amount
+                        INNER JOIN worker_payments wp
+                            ON wp.id = wpa.worker_payment_id
+                            AND wp.organization_id = wpa.organization_id
 
-			FROM production_entries pe
+                        WHERE wpa.organization_id = pe.organization_id
+                            AND wpa.production_entry_id = pe.id
+                            AND wp.status = $2
+                    ),
+                    0
+                ) AS paid_amount
 
-			WHERE pe.organization_id = $1
-				AND pe.deleted_at IS NULL
-		)
+            FROM production_entries pe
 
-		SELECT
-			gw.id,
-			gw.name,
-			COALESCE(gw.phone, ''),
-			COALESCE(gw.photo_key, ''),
+            INNER JOIN bundles b
+                ON b.id = pe.bundle_id
+                AND b.organization_id = pe.organization_id
+                AND b.deleted_at IS NULL
 
-			COALESCE(SUM(eb.total_amount), 0) AS total_earned,
-			COALESCE(SUM(eb.paid_amount), 0) AS total_paid,
+            WHERE pe.organization_id = $1
+                AND pe.deleted_at IS NULL
 
-			COALESCE(
-				SUM(eb.total_amount - eb.paid_amount),
-				0
-			) AS total_pending,
+                AND ($3 = '' OR pe.bundle_id = $3)
+                AND ($4 = '' OR pe.worker_id = $4)
+                AND ($5 = '' OR b.style_id = $5)
+                AND ($6 = '' OR pe.style_operation_id = $6)
 
-			COUNT(*) FILTER (
-				WHERE eb.total_amount - eb.paid_amount > 0
-			) AS pending_entries
+                AND ($7::timestamptz IS NULL OR pe.production_date >= $7)
+                AND ($8::timestamptz IS NULL OR pe.production_date <= $8)
+        ),
 
-		FROM entry_balances eb
+        worker_balances AS (
+            SELECT
+                gw.id,
+                gw.name,
+                COALESCE(gw.phone, '') AS phone,
+                COALESCE(gw.photo_key, '') AS photo_key,
 
-		INNER JOIN garment_workers gw
-			ON gw.id = eb.worker_id
-			AND gw.organization_id = $1
-			AND gw.deleted_at IS NULL
+                COALESCE(SUM(eb.total_amount), 0) AS total_earned,
+                COALESCE(SUM(eb.paid_amount), 0) AS total_paid,
 
-		WHERE (
-			$3 = ''
-			OR gw.name ILIKE '%' || $3 || '%'
-			OR gw.phone ILIKE '%' || $3 || '%'
-			OR gw.id ILIKE '%' || $3 || '%'
-		)
+                COALESCE(
+                    SUM(eb.total_amount - eb.paid_amount),
+                    0
+                ) AS total_pending,
 
-		GROUP BY
-			gw.id,
-			gw.name,
-			gw.phone,
-			gw.photo_key
+                COUNT(*) FILTER (
+                    WHERE eb.total_amount - eb.paid_amount > 0
+                ) AS pending_entries
 
-		HAVING SUM(eb.total_amount - eb.paid_amount) > 0
+            FROM entry_balances eb
 
-		ORDER BY total_pending DESC, gw.name ASC
+            INNER JOIN garment_workers gw
+                ON gw.id = eb.worker_id
+                AND gw.organization_id = $1
+                AND gw.deleted_at IS NULL
 
-		LIMIT $4 OFFSET $5
-	`
+            WHERE (
+                $9 = ''
+                OR gw.name ILIKE '%' || $9 || '%'
+                OR gw.phone ILIKE '%' || $9 || '%'
+                OR gw.id ILIKE '%' || $9 || '%'
+            )
 
-	search := strings.TrimSpace(filter.Search)
+            GROUP BY
+                gw.id,
+                gw.name,
+                gw.phone,
+                gw.photo_key
+        )
+    `
 
-	limit := filter.Limit
-	offset := filter.Offset
-	rows, err := r.db.QueryContext(
-		ctx,
-		query,
-		organizationID,
-		entity.PaymentStatusCompleted,
-		search,
-		limit,
-		offset,
-	)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"list worker payment balances: %w",
-			err,
-		)
-	}
-	defer rows.Close()
+    args := []any{
+        organizationID,
+        entity.PaymentStatusCompleted,
+        filter.BundleID,
+        filter.WorkerID,
+        filter.StyleID,
+        filter.StyleOperationID,
+        filter.FromDate,
+        filter.ToDate,
+        strings.TrimSpace(filter.Search),
+    }
 
-	balances := make([]*output.WorkerPaymentBalance, 0)
+    // GET SUMMARY
 
-	for rows.Next() {
-		balance := &output.WorkerPaymentBalance{}
+    summaryQuery := baseQuery + `
+        SELECT
+            COALESCE(SUM(total_earned), 0),
+            COALESCE(SUM(total_paid), 0),
+            COALESCE(SUM(total_pending), 0),
+            COALESCE(SUM(pending_entries), 0),
+            COUNT(*) FILTER (WHERE total_pending > 0)
 
-		if err := rows.Scan(
-			&balance.Worker.ID,
-			&balance.Worker.Name,
-			&balance.Worker.Phone,
-			&balance.Worker.PhotoKey,
-			&balance.TotalEarned,
-			&balance.TotalPaid,
-			&balance.TotalPending,
-			&balance.PendingEntries,
-		); err != nil {
-			return nil, fmt.Errorf(
-				"scan worker payment balance: %w",
-				err,
-			)
-		}
+        FROM worker_balances
+    `
 
-		balances = append(balances, balance)
-	}
+    err := r.db.QueryRowContext(
+        ctx,
+        summaryQuery,
+        args...,
+    ).Scan(
+        &result.Summary.TotalEarned,
+        &result.Summary.TotalPaid,
+        &result.Summary.TotalPending,
+        &result.Summary.PendingEntries,
+        &result.Summary.TotalWorkers,
+    )
+    if err != nil {
+        return nil, fmt.Errorf(
+            "get worker payment balance summary: %w",
+            err,
+        )
+    }
 
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf(
-			"iterate worker payment balances: %w",
-			err,
-		)
-	}
+    // GET PAGINATED WORKERS
 
-	return balances, nil
+    workersQuery := baseQuery + `
+        SELECT
+            id,
+            name,
+            phone,
+            photo_key,
+            total_earned,
+            total_paid,
+            total_pending,
+            pending_entries
+
+        FROM worker_balances
+
+        WHERE total_pending > 0
+
+        ORDER BY total_pending DESC, name ASC
+
+        LIMIT $10 OFFSET $11
+    `
+
+    workerArgs := append(
+        args,
+        filter.Limit,
+        filter.Offset,
+    )
+
+    rows, err := r.db.QueryContext(
+        ctx,
+        workersQuery,
+        workerArgs...,
+    )
+    if err != nil {
+        return nil, fmt.Errorf(
+            "list worker payment balances: %w",
+            err,
+        )
+    }
+    defer rows.Close()
+
+    for rows.Next() {
+        balance := &output.WorkerPaymentBalance{}
+
+        if err := rows.Scan(
+            &balance.Worker.ID,
+            &balance.Worker.Name,
+            &balance.Worker.Phone,
+            &balance.Worker.PhotoKey,
+            &balance.TotalEarned,
+            &balance.TotalPaid,
+            &balance.TotalPending,
+            &balance.PendingEntries,
+        ); err != nil {
+            return nil, fmt.Errorf(
+                "scan worker payment balance: %w",
+                err,
+            )
+        }
+
+        result.Workers = append(
+            result.Workers,
+            balance,
+        )
+    }
+
+    if err := rows.Err(); err != nil {
+        return nil, fmt.Errorf(
+            "iterate worker payment balances: %w",
+            err,
+        )
+    }
+
+    return result, nil
 }
 
 // VOID PAYMENT

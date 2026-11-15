@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"stitchforce-server/config"
+	"stitchforce-server/internal/authorization"
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/repo"
 	"stitchforce-server/internal/storage"
@@ -26,6 +27,7 @@ import (
 
 type UseCase struct {
 	repository  repo.UserRepository
+	sessions    repo.UserSessionRepository
 	logger      *logger.Logger
 	storage     storage.Storage
 	emailer     email.Sender
@@ -39,6 +41,7 @@ const (
 
 func New(
 	repository repo.UserRepository,
+	sessions repo.UserSessionRepository,
 	logger *logger.Logger,
 	storage storage.Storage,
 	emailer email.Sender,
@@ -46,6 +49,7 @@ func New(
 ) usecase.UserUseCase {
 	return &UseCase{
 		repository:  repository,
+		sessions:    sessions,
 		logger:      logger,
 		storage:     storage,
 		emailer:     emailer,
@@ -135,38 +139,71 @@ func (u *UseCase) Register(
 func (u *UseCase) Login(
 	ctx context.Context,
 	email, password string,
-) (*output.User, error) {
+	deviceName string,
+	ipAddress string,
+	userAgent string,
+) (*output.User, *entity.UserSession, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 
 	if email == "" || password == "" {
-		return nil, errors.New("email and password are required")
+		return nil, nil, errors.New("email and password are required")
 	}
 
 	user, err := u.repository.GetByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, repo.ErrNotFound) {
-			return nil, errors.New("invalid email or password")
+			return nil, nil, errors.New("no user found with the provided email")
 		}
-		return nil, err
+		return nil, nil, err
 	}
 
 	if err := bcrypt.CompareHashAndPassword(
 		[]byte(user.PasswordHash),
 		[]byte(password),
 	); err != nil {
-		return nil, errors.New("invalid email or password")
+		return nil, nil, errors.New("invalid email or password")
 	}
 
 	if user.EmailVerifiedAt == nil {
 		if err := u.SendEmailVerification(ctx, user); err != nil {
 			u.logger.Error("failed to resend email verification", "error", err)
-			return nil, errors.New("email is not verified and verification email could not be sent")
+			return nil, nil, errors.New("email is not verified and verification email could not be sent")
 		}
 
-		return nil, errors.New("email is not verified. A new verification link has been sent to your email")
+		return nil, nil, errors.New("email is not verified. A new verification link has been sent to your email")
 	}
 
-	return u.toOutput(ctx, user)
+	newSessionID, err := utils.NewID()
+	if err != nil {
+		return nil, nil, errors.New("failed to generate session ID")
+	}
+
+	session := &entity.UserSession{
+		ID:             newSessionID,
+		UserID:         user.ID,
+		OrganizationID: user.OrganizationID,
+		DeviceName:     deviceName,
+		IPAddress:      ipAddress,
+		UserAgent:      userAgent,
+		ExpiresAt:      time.Now().Add(30 * 24 * time.Hour),
+	}
+
+	if err := u.sessions.CreateWithLimit(
+		ctx,
+		session,
+		user.MaxSessions,
+	); err != nil {
+		u.logger.Error("failed to create user session", "error", err)
+		return nil, nil, errors.New("failed to create login session")
+	}
+
+	userOutput, err := u.toOutput(ctx, user)
+	if err != nil {
+		_ = u.sessions.Revoke(ctx, session.ID)
+		return nil, nil, err
+	}
+
+	return userOutput, session, nil
 }
 
 func (u *UseCase) GetByID(
@@ -250,6 +287,21 @@ func (u *UseCase) Update(
 		existing.Email = strings.ToLower(strings.TrimSpace(*input.Email))
 	}
 
+	if input.Role != nil {
+		if !input.Role.IsValid() {
+			return errors.New("invalid user role")
+		}
+
+		if existing.Role == entity.UserRoleOrgAdmin {
+			return errors.New("organization admin role cannot be changed")
+		}
+
+		if *input.Role == entity.UserRoleOrgAdmin {
+			return errors.New("cannot assign organization admin role through user update")
+		}
+
+		existing.Role = *input.Role
+	}
 
 	// Validate the final user state.
 	if len(existing.Name) < 2 || len(existing.Name) > 100 {
@@ -260,7 +312,7 @@ func (u *UseCase) Update(
 		return errors.New("email is required")
 	}
 
-	if existing.Role != "org_admin" && existing.Role != "staff" {
+	if !existing.Role.IsValid() {
 		return errors.New("invalid user role")
 	}
 
@@ -316,7 +368,6 @@ func (u *UseCase) Update(
 	)
 
 	if err := u.repository.Update(ctx, existing); err != nil {
-		// Cleanup newly uploaded photo if database update fails.
 		if newPhotoKey != "" {
 			if deleteErr := u.storage.Delete(ctx, newPhotoKey); deleteErr != nil {
 				u.logger.ErrorContext(
@@ -346,31 +397,46 @@ func (u *UseCase) Update(
 	return nil
 }
 
-func (u *UseCase) Delete(
+func (u *UseCase) DeleteMe(
 	ctx context.Context,
-	id string,
+	userID string,
+	password string,
 ) error {
-	user, err := u.repository.GetByID(ctx, id)
+	user, err := u.repository.GetByID(ctx, userID)
 	if err != nil {
 		return err
 	}
 
-	if err := u.repository.Delete(ctx, id); err != nil {
+	if user.Role == entity.UserRoleOrgAdmin {
+		return errors.New(
+			"organization admins cannot delete their account; delete the organization first",
+		)
+	}
+
+	if err := bcrypt.CompareHashAndPassword(
+		[]byte(user.PasswordHash),
+		[]byte(password),
+	); err != nil {
+		return errors.New("invalid password")
+	}
+
+	return u.deleteUser(ctx, user)
+}
+
+func (u *UseCase) Delete(
+	ctx context.Context,
+	userID string,
+) error {
+	user, err := u.repository.GetByID(ctx, userID)
+	if err != nil {
 		return err
 	}
 
-	if user.PhotoKey != "" {
-		if err := u.storage.Delete(ctx, user.PhotoKey); err != nil {
-			u.logger.ErrorContext(
-				ctx,
-				"failed to delete user photo",
-				"photo_key", user.PhotoKey,
-				"error", err,
-			)
-		}
+	if user.Role == entity.UserRoleOrgAdmin {
+		return errors.New("organization admin accounts cannot be deleted")
 	}
 
-	return nil
+	return u.deleteUser(ctx, user)
 }
 
 func (u *UseCase) SendEmailVerification(
@@ -438,7 +504,155 @@ func (u *UseCase) VerifyEmail(
 	return nil
 }
 
+const passwordResetTokenExpiry = 30 * time.Minute
+
+func (u *UseCase) ForgotPassword(
+	ctx context.Context,
+	emailAddress string,
+) error {
+	emailAddress = strings.ToLower(strings.TrimSpace(emailAddress))
+
+	if emailAddress == "" {
+		return errors.New("email is required")
+	}
+
+	user, err := u.repository.GetByEmail(ctx, emailAddress)
+	if err != nil {
+		// Return the same response for unknown emails.
+		// Log unexpected repository errors in your project logger.
+		return nil
+	}
+
+	if user.DeletedAt != nil {
+		return nil
+	}
+
+	rawToken, err := utils.GenerateToken()
+	if err != nil {
+		return err
+	}
+
+	tokenHash := utils.HashToken(rawToken)
+	expiresAt := time.Now().Add(passwordResetTokenExpiry)
+
+	if err := u.repository.CreatePasswordResetToken(
+		ctx,
+		user.ID,
+		tokenHash,
+		expiresAt,
+	); err != nil {
+		return err
+	}
+
+	resetURL := strings.TrimRight(u.frontendCfg.URL, "/") +
+		"/reset-password?token=" +
+		url.QueryEscape(rawToken)
+
+	body := buildPasswordResetEmail(user.Name, resetURL)
+
+	htmlBody, err := email.Render(body)
+	if err != nil {
+		return err
+	}
+
+	err = u.emailer.Send(ctx, email.Message{
+		To:      []string{user.Email},
+		Subject: "Reset your password",
+		HTML:    htmlBody,
+	})
+
+	return err
+}
+
+func (u *UseCase) ResetPassword(
+	ctx context.Context,
+	rawToken string,
+	newPassword string,
+) error {
+	rawToken = strings.TrimSpace(rawToken)
+
+	if rawToken == "" {
+		return errors.New("reset token is required")
+	}
+
+	if len(newPassword) < 8 || len(newPassword) > 72 {
+		return errors.New("password must be between 8 and 72 characters")
+	}
+
+	passwordHash, err := bcrypt.GenerateFromPassword(
+		[]byte(newPassword),
+		bcrypt.DefaultCost,
+	)
+	if err != nil {
+		return err
+	}
+
+	user, err := u.repository.ResetPassword(
+		ctx,
+		utils.HashToken(rawToken),
+		string(passwordHash),
+	)
+	if err != nil {
+		return err
+	}
+
+	htmlBody, err := buildPasswordChangedEmail(user.Name)
+	if err != nil {
+		return err
+	}
+
+	return u.emailer.Send(ctx, email.Message{
+		To:      []string{user.Email},
+		Subject: "Your StitchForce password has been changed",
+		HTML:    htmlBody,
+	})
+}
+
+func (u *UseCase) RevokeSession(
+	ctx context.Context,
+	sessionID string,
+) error {
+	if sessionID == "" {
+		return errors.New("session ID is required")
+	}
+
+	return u.sessions.Revoke(ctx, sessionID)
+}
+
+func (u *UseCase) GetActiveSession(
+	ctx context.Context,
+	sessionID string,
+) (*entity.UserSession, error) {
+	if sessionID == "" {
+		return nil, errors.New("session ID is required")
+	}
+
+	return u.sessions.GetActive(ctx, sessionID)
+}
+
 // Helpers
+func (u *UseCase) deleteUser(
+	ctx context.Context,
+	user *entity.User,
+) error {
+	if err := u.repository.Delete(ctx, user.ID); err != nil {
+		return err
+	}
+
+	if user.PhotoKey != "" {
+		if err := u.storage.Delete(ctx, user.PhotoKey); err != nil {
+			u.logger.ErrorContext(
+				ctx,
+				"failed to delete user photo",
+				"photo_key", user.PhotoKey,
+				"error", err,
+			)
+		}
+	}
+
+	return nil
+}
+
 func (u *UseCase) toOutput(
 	ctx context.Context,
 	user *entity.User,
@@ -453,9 +667,14 @@ func (u *UseCase) toOutput(
 		Name:            user.Name,
 		Email:           user.Email,
 		Role:            user.Role,
+		Permissions:     make([]string, 0),
 		EmailVerifiedAt: user.EmailVerifiedAt,
 		CreatedAt:       user.CreatedAt,
 		UpdatedAt:       user.UpdatedAt,
+	}
+
+	for _, permission := range authorization.GetPermissions(user.Role) {
+		result.Permissions = append(result.Permissions, string(permission))
 	}
 
 	if strings.TrimSpace(user.PhotoKey) != "" {
@@ -472,4 +691,90 @@ func (u *UseCase) toOutput(
 	}
 
 	return result, nil
+}
+
+func buildPasswordResetEmail(name, resetURL string) string {
+	safeName := html.EscapeString(name)
+	safeURL := html.EscapeString(resetURL)
+
+	body := fmt.Sprintf(`
+		<div>
+			<h2 style="margin:0 0 20px;">Reset your password</h2>
+
+			<p>Hello %s,</p>
+
+			<p>
+				We received a request to reset the password for your StitchForce account.
+				Click the button below to choose a new password.
+			</p>
+
+			<div style="margin:32px 0;">
+				<a href="%s"
+				   style="
+						display:inline-block;
+						padding:13px 24px;
+						background:#18181b;
+						color:#ffffff;
+						text-decoration:none;
+						border-radius:7px;
+						font-weight:bold;
+				   ">
+					Reset password
+				</a>
+			</div>
+
+			<p style="font-size:14px;color:#52525b;">
+				This link expires in 30 minutes. If you did not request a password
+				reset, you can safely ignore this email.
+			</p>
+
+			<p style="font-size:13px;color:#71717a;word-break:break-all;">
+				If the button does not work, copy this link into your browser:<br>
+				%s
+			</p>
+
+			<hr style="border:none;border-top:1px solid #e4e4e7;margin:28px 0;">
+
+			<p style="font-size:12px;color:#a1a1aa;">
+				This is an automated email from StitchForce. Please do not reply.
+			</p>
+		</div>
+	`, safeName, safeURL, safeURL)
+
+	return body
+}
+
+func buildPasswordChangedEmail(name string) (string, error) {
+	safeName := html.EscapeString(name)
+
+	body := fmt.Sprintf(`
+		<div>
+			<h2 style="margin:0 0 20px;">Password successfully changed</h2>
+
+			<p>Hello %s,</p>
+
+			<p>
+				Your StitchForce account password has been successfully changed.
+			</p>
+
+			<p style="font-size:14px;color:#52525b;">
+				If you made this change, no further action is required.
+			</p>
+
+			<p style="font-size:14px;color:#52525b;">
+				If you did not change your password, please contact our support
+				team immediately to secure your account.
+			</p>
+
+			<hr style="border:none;border-top:1px solid #e4e4e7;margin:28px 0;">
+
+			<p style="font-size:12px;color:#a1a1aa;">
+				This is an automated email from StitchForce. Please do not reply.
+			</p>
+		</div>
+	`,
+		safeName,
+	)
+
+	return email.Render(body)
 }

@@ -11,7 +11,7 @@ type CreateBundle struct {
 	SizeID       string              `json:"size_id" validate:"required"`
 	Quantity     int                 `json:"quantity" validate:"required,gt=0"`
 	Attributes   json.RawMessage     `json:"attributes" validate:"omitempty"`
-	Status       entity.BundleStatus `json:"status" validate:"omitempty,oneof=created ready"`
+	Status       entity.BundleStatus `json:"status" validate:"omitempty"`
 	Remarks      string              `json:"remarks" validate:"omitempty,max=1000"`
 }
 
@@ -20,6 +20,6 @@ type UpdateBundle struct {
     SizeID       *string              `json:"size_id" validate:"omitempty"`
     Quantity     *int                 `json:"quantity" validate:"omitempty,gt=0"`
     Attributes   *json.RawMessage     `json:"attributes" validate:"omitempty"`
-    Status       *entity.BundleStatus `json:"status" validate:"omitempty,oneof=created ready"`
+    Status       *entity.BundleStatus `json:"status" validate:"omitempty"`
     Remarks      *string              `json:"remarks" validate:"omitempty,max=1000"`
 }

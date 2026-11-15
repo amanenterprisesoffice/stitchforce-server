@@ -1,11 +1,9 @@
 package v1
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -162,31 +160,31 @@ func (h *BundleHandler) List(c *gin.Context) {
 		}
 		filter.Offset = value
 	}
-
-	if createdFrom := c.Query(CreatedFrom); createdFrom != "" {
-		date, err := time.Parse(DateLayout, createdFrom)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": fmt.Sprintf("created_from must be in %s format", DateLayout),
-			})
-			return
-		}
-		filter.CreatedFrom = &date
+	date, err := parseDate(c, CreatedFrom)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
 	}
 
-	if createdTo := c.Query(CreatedTo); createdTo != "" {
-		date, err := time.Parse(DateLayout, createdTo)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": fmt.Sprintf("created_to must be in %s format", DateLayout),
-			})
-			return
-		}
+	filter.CreatedFrom = date
 
+	date, err = parseDate(c, CreatedTo)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	if date != nil {
 		// Make the end date inclusive.
-		date = date.AddDate(0, 0, 1)
-		filter.CreatedTo = &date
+		endDate := date.AddDate(0, 0, 1)
+		filter.CreatedTo = &endDate
 	}
+
+	filter.CreatedTo = date
 
 	bundles, err := h.bundles.List(
 		c.Request.Context(),

@@ -3,6 +3,7 @@ package organization
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -44,7 +45,6 @@ func (r *Repository) Create(
 	)
 }
 
-
 func (r *Repository) GetByUserAndOrganization(
 	ctx context.Context,
 	userID string,
@@ -65,7 +65,11 @@ func (r *Repository) GetByUserAndOrganization(
 			o.license_status,
 			o.license_expires_at,
 			o.created_at,
-			o.updated_at
+			o.updated_at,
+			o.dashboard_alert_enabled,
+			o.dashboard_alert_email,
+			o.dashboard_alert_schedule,
+			o.dashboard_alert_last_sent_at
 		FROM organizations o
 		INNER JOIN users u ON u.organization_id = o.id
 		WHERE u.id = $1
@@ -85,107 +89,118 @@ func (r *Repository) GetByUserAndOrganization(
 }
 
 func (r *Repository) GetByID(
-    ctx context.Context,
-    id string,
+	ctx context.Context,
+	id string,
 ) (*entity.Organization, error) {
-    org, err := scanOrganization(r.db.QueryRowContext(
-        ctx,
-        `SELECT `+selectColumns+`
+	org, err := scanOrganization(r.db.QueryRowContext(
+		ctx,
+		`SELECT `+selectColumns+`
          FROM organizations
          WHERE id = $1`,
-        id,
-    ))
+		id,
+	))
 
-    if errors.Is(err, sql.ErrNoRows) {
-        return nil, repo.ErrNotFound
-    }
-    if err != nil {
-        return nil, err
-    }
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, repo.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
 
-    return org, nil
+	return org, nil
 }
 
 func (r *Repository) List(
-    ctx context.Context,
+	ctx context.Context,
 ) ([]*entity.Organization, error) {
-    rows, err := r.db.QueryContext(
-        ctx,
-        `SELECT `+selectColumns+`
+	rows, err := r.db.QueryContext(
+		ctx,
+		`SELECT `+selectColumns+`
          FROM organizations
          ORDER BY created_at DESC`,
-    )
-    if err != nil {
-        return nil, err
-    }
-    defer rows.Close()
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
-    organizations := make([]*entity.Organization, 0)
+	organizations := make([]*entity.Organization, 0)
 
-    for rows.Next() {
-        org, err := scanOrganization(rows)
-        if err != nil {
-            return nil, err
-        }
+	for rows.Next() {
+		org, err := scanOrganization(rows)
+		if err != nil {
+			return nil, err
+		}
 
-        organizations = append(organizations, org)
-    }
+		organizations = append(organizations, org)
+	}
 
-    if err := rows.Err(); err != nil {
-        return nil, err
-    }
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
-    return organizations, nil
+	return organizations, nil
 }
 
 func (r *Repository) Update(
-    ctx context.Context,
-    org *entity.Organization,
+	ctx context.Context,
+	org *entity.Organization,
 ) error {
+	schedule, err := json.Marshal(org.DashboardAlertSchedule)
+	if err != nil {
+		return err
+	}
 
-    query := `
-        UPDATE organizations
-        SET
-            name = COALESCE(NULLIF($2, ''), name),
-            address_line_1 = COALESCE(NULLIF($3, ''), address_line_1),
-            address_line_2 = COALESCE(NULLIF($4, ''), address_line_2),
-            city = COALESCE(NULLIF($5, ''), city),
-            state = COALESCE(NULLIF($6, ''), state),
-            postal_code = COALESCE(NULLIF($7, ''), postal_code),
-            country = COALESCE(NULLIF($8, ''), country),
-            photo_key = COALESCE(NULLIF($9, ''), photo_key),
-            updated_at = NOW()
-        WHERE id = $1
-    `
+	query := `
+		UPDATE organizations
+		SET
+			name = $2,
+			address_line_1 = $3,
+			address_line_2 = $4,
+			city = $5,
+			state = $6,
+			postal_code = $7,
+			country = $8,
+			photo_key = $9,
+			dashboard_alert_enabled = $10,
+			dashboard_alert_email = $11,
+			dashboard_alert_schedule = $12,
+			updated_at = NOW()
+		WHERE id = $1
+	`
 
-    result, err := r.db.ExecContext(
-        ctx,
-        query,
-        org.ID,
-        org.Name,
-        org.AddressLine1,
-        org.AddressLine2,
-        org.City,
-        org.State,
-        org.PostalCode,
-        org.Country,
-        org.PhotoKey,
-    )
-    if err != nil {
-        return err
-    }
+	result, err := r.db.ExecContext(
+		ctx,
+		query,
+		org.ID,
+		org.Name,
+		org.AddressLine1,
+		org.AddressLine2,
+		org.City,
+		org.State,
+		org.PostalCode,
+		org.Country,
+		org.PhotoKey,
+		org.DashboardAlertEnabled,
+		org.DashboardAlertEmail,
+		schedule,
+	)
+	if err != nil {
+		return err
+	}
 
-    affected, err := result.RowsAffected()
-    if err != nil {
-        return err
-    }
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
 
-    if affected == 0 {
-        return repo.ErrNotFound
-    }
+	if affected == 0 {
+		return repo.ErrNotFound
+	}
 
-    return nil
+	return nil
 }
+
 func (r *Repository) Delete(
 	ctx context.Context,
 	id string,
@@ -662,6 +677,95 @@ func (r *Repository) GetDashboardTrend(
 	return dashboard, nil
 }
 
+func (r *Repository) UpdateDashboardAlertLastSent(
+	ctx context.Context,
+	organizationID string,
+	sentAt time.Time,
+) error {
+	query := `
+		UPDATE organizations
+		SET dashboard_alert_last_sent_at = $2
+		WHERE id = $1
+	`
+
+	result, err := r.db.ExecContext(
+		ctx,
+		query,
+		organizationID,
+		sentAt,
+	)
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if affected == 0 {
+		return repo.ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *Repository) ListDashboardAlertOrganizations(
+	ctx context.Context,
+) ([]*entity.Organization, error) {
+	query := `
+		SELECT
+			id,
+			name,
+			dashboard_alert_email,
+			dashboard_alert_schedule,
+			dashboard_alert_last_sent_at
+		FROM organizations
+		WHERE dashboard_alert_enabled = TRUE
+		  AND dashboard_alert_email <> ''
+	`
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	organizations := make([]*entity.Organization, 0)
+
+	for rows.Next() {
+		org := &entity.Organization{}
+		var schedule []byte
+		var lastSentAt sql.NullTime
+
+		if err := rows.Scan(
+			&org.ID,
+			&org.Name,
+			&org.DashboardAlertEmail,
+			&schedule,
+			&lastSentAt,
+		); err != nil {
+			return nil, err
+		}
+
+		if err := json.Unmarshal(schedule, &org.DashboardAlertSchedule); err != nil {
+			return nil, err
+		}
+
+		if lastSentAt.Valid {
+			org.DashboardAlertLastSentAt = &lastSentAt.Time
+		}
+
+		organizations = append(organizations, org)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return organizations, nil
+}
+
 // Helpers
 func dashboardBucketStart(date time.Time, groupBy input.DashboardGroup) time.Time {
 	year, month, day := date.Date()
@@ -763,7 +867,6 @@ func dashboardBucketLabel(
 	return start.Format("Jan 2")
 }
 
-
 const selectColumns = `
     id,
     name,
@@ -777,39 +880,47 @@ const selectColumns = `
     license_status,
     license_expires_at,
     created_at,
-    updated_at
+    updated_at,
+    dashboard_alert_enabled,
+    dashboard_alert_email,
+	dashboard_alert_schedule,
+	dashboard_alert_last_sent_at
 `
 
 func scanOrganization(row interface {
-    Scan(dest ...any) error
+	Scan(dest ...any) error
 }) (*entity.Organization, error) {
-    var (
-        org       entity.Organization
-        expiresAt sql.NullTime
-    )
+	var (
+		org       entity.Organization
+		expiresAt sql.NullTime
+	)
 
-    err := row.Scan(
-        &org.ID,
-        &org.Name,
-        &org.AddressLine1,
-        &org.AddressLine2,
-        &org.City,
-        &org.State,
-        &org.PostalCode,
-        &org.Country,
-        &org.PhotoKey,
-        &org.LicenseStatus,
-        &expiresAt,
-        &org.CreatedAt,
-        &org.UpdatedAt,
-    )
-    if err != nil {
-        return nil, err
-    }
+	err := row.Scan(
+		&org.ID,
+		&org.Name,
+		&org.AddressLine1,
+		&org.AddressLine2,
+		&org.City,
+		&org.State,
+		&org.PostalCode,
+		&org.Country,
+		&org.PhotoKey,
+		&org.LicenseStatus,
+		&expiresAt,
+		&org.CreatedAt,
+		&org.UpdatedAt,
+		&org.DashboardAlertEnabled,
+		&org.DashboardAlertEmail,
+		&org.DashboardAlertSchedule,
+		&org.DashboardAlertLastSentAt,
+	)
+	if err != nil {
+		return nil, err
+	}
 
-    if expiresAt.Valid {
-        org.LicenseExpiresAt = &expiresAt.Time
-    }
+	if expiresAt.Valid {
+		org.LicenseExpiresAt = &expiresAt.Time
+	}
 
-    return &org, nil
+	return &org, nil
 }

@@ -195,7 +195,7 @@ func (u *UseCase) List(
 	ctx context.Context,
 	organizationID string,
 	filter input.WorkerPaymentFilter,
-) ([]*output.WorkerPayment, error) {
+) (*output.WorkerPaymentList, error) {
 
 	organizationID, err := utils.ValidateOrganizationID(organizationID)
 	if err != nil {
@@ -223,7 +223,7 @@ func (u *UseCase) List(
 		filter.Offset = 0
 	}
 
-	payments, err := u.repository.List(
+	result, err := u.repository.List(
 		ctx,
 		organizationID,
 		filter,
@@ -232,7 +232,21 @@ func (u *UseCase) List(
 		return nil, fmt.Errorf("list worker payments: %w", err)
 	}
 
-	for _, payment := range payments {
+	if result == nil {
+		result = &output.WorkerPaymentList{
+			Payments: make([]*output.SlimWorkerPayment, 0),
+		}
+	}
+
+	if result.Payments == nil {
+		result.Payments = make([]*output.SlimWorkerPayment, 0)
+	}
+
+	for _, payment := range result.Payments {
+		if payment == nil {
+			continue
+		}
+
 		if strings.TrimSpace(payment.Worker.PhotoKey) == "" {
 			continue
 		}
@@ -253,7 +267,7 @@ func (u *UseCase) List(
 		payment.Worker.PhotoKey = ""
 	}
 
-	return payments, nil
+	return result, nil
 }
 
 // GET WORKER PAYMENT SUMMARY
@@ -308,7 +322,7 @@ func (u *UseCase) ListWorkerBalances(
 	ctx context.Context,
 	organizationID string,
 	filter input.WorkerPaymentBalanceFilter,
-) ([]*output.WorkerPaymentBalance, error) {
+) (*output.WorkerPaymentBalanceList, error) {
 
 	organizationID = strings.TrimSpace(organizationID)
 
@@ -317,6 +331,10 @@ func (u *UseCase) ListWorkerBalances(
 	}
 
 	filter.Search = strings.TrimSpace(filter.Search)
+	filter.BundleID = strings.TrimSpace(filter.BundleID)
+	filter.WorkerID = strings.TrimSpace(filter.WorkerID)
+	filter.StyleID = strings.TrimSpace(filter.StyleID)
+	filter.StyleOperationID = strings.TrimSpace(filter.StyleOperationID)
 
 	if filter.Limit <= 0 {
 		filter.Limit = 20
@@ -330,7 +348,7 @@ func (u *UseCase) ListWorkerBalances(
 		filter.Offset = 0
 	}
 
-	balances, err := u.repository.ListWorkerBalances(
+	result, err := u.repository.ListWorkerBalances(
 		ctx,
 		organizationID,
 		filter,
@@ -348,12 +366,17 @@ func (u *UseCase) ListWorkerBalances(
 		)
 	}
 
-	if balances == nil {
-		balances = make([]*output.WorkerPaymentBalance, 0)
+	if result == nil {
+		result = &output.WorkerPaymentBalanceList{
+			Workers: make([]*output.WorkerPaymentBalance, 0),
+		}
 	}
 
-	// for each worker put singed url
-	for _, entry := range balances {
+	if result.Workers == nil {
+		result.Workers = make([]*output.WorkerPaymentBalance, 0)
+	}
+
+	for _, entry := range result.Workers {
 		if strings.TrimSpace(entry.Worker.PhotoKey) == "" {
 			continue
 		}
@@ -371,13 +394,11 @@ func (u *UseCase) ListWorkerBalances(
 			)
 		}
 
-		entry.Worker.PhotoURL = photoURL
-
-		// Never expose the storage key.
+		entry.PhotoURL = photoURL
 		entry.Worker.PhotoKey = ""
 	}
 
-	return balances, nil
+	return result, nil
 }
 
 // VOID PAYMENT

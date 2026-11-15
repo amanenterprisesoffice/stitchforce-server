@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"time"
 
 	"stitchforce-server/internal/entity"
 	"stitchforce-server/internal/usecase/input"
@@ -59,14 +60,27 @@ type OrganizationUseCase interface {
 		string, // organizationID
 		input.DashboardFilter,
 	) (*output.OrganizationDashboard, error)
+
+	SendDueDashboardAlerts(
+		ctx context.Context,
+		now time.Time,
+	) (int, error)
 }
 
 type UserUseCase interface {
 	Register(context.Context, string, string, string) (*entity.User, error)
-	Login(context.Context, string, string) (*output.User, error)
-
-	VerifyEmail(context.Context, string) error
-	SendEmailVerification(context.Context, *entity.User) error
+	Login(
+		ctx context.Context,
+		email, password string,
+		deviceName string,
+		ipAddress string,
+		userAgent string,
+	) (*output.User, *entity.UserSession, error)
+	RevokeSession(ctx context.Context, sessionID string) error
+	GetActiveSession(
+		ctx context.Context,
+		sessionID string,
+	) (*entity.UserSession, error)
 
 	GetByID(context.Context, string) (*output.User, error)
 
@@ -78,12 +92,21 @@ type UserUseCase interface {
 
 	Update(
 		context.Context,
-		string, // userID
+		string,
 		*input.UpdateUserInput,
 	) error
 
 	Delete(context.Context, string) error
+	DeleteMe(context.Context, string, string) error
+
+	// Authentication
+	VerifyEmail(context.Context, string) error
+	SendEmailVerification(context.Context, *entity.User) error
+
+	ForgotPassword(context.Context, string) error
+	ResetPassword(context.Context, string, string) error
 }
+
 type StyleUseCase interface {
 	Create(
 		context.Context,
@@ -295,7 +318,7 @@ type WorkerPaymentUseCase interface {
 		context.Context,
 		string, // organizationID
 		input.WorkerPaymentFilter,
-	) ([]*output.WorkerPayment, error)
+	) (*output.WorkerPaymentList, error)
 
 	GetSummary(
 		context.Context,
@@ -307,7 +330,7 @@ type WorkerPaymentUseCase interface {
 		context.Context,
 		string, // organizationID
 		input.WorkerPaymentBalanceFilter,
-	) ([]*output.WorkerPaymentBalance, error)
+	) (*output.WorkerPaymentBalanceList, error)
 
 	Void(
 		context.Context,

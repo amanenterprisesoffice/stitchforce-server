@@ -41,6 +41,7 @@ func NewUseCases(
 	return UseCases{
 		Users: useruc.New(
 			repositories.Users,
+			repositories.Sessions,
 			log,
 			storage,
 			emailer,

@@ -159,6 +159,7 @@ func (r *OrganizationInvitationRepository) ListByOrganization(
 			created_at
 		FROM organization_invitations
 		WHERE organization_id = $1
+		  AND accepted_at IS NULL
 		ORDER BY created_at DESC
 	`,
 		organizationID,
@@ -313,3 +314,6 @@ func (r *OrganizationInvitationRepository) Accept(
 
 	return tx.Commit()
 }
+
+
+var _ repo.OrganizationInvitationRepository = (*OrganizationInvitationRepository)(nil)

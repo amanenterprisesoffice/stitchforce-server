@@ -102,9 +102,12 @@ func (r *Repository) GetByID(
 			COALESCE(photo_key, ''),
 			email_verified_at,
 			created_at,
-			updated_at
+			updated_at,
+			COALESCE(deleted_at, NULL),
+			max_sessions
 		FROM users
 		WHERE id = $1
+		  AND deleted_at IS NULL
 	`, id)
 }
 
@@ -123,41 +126,15 @@ func (r *Repository) GetByEmail(
 			COALESCE(photo_key, ''),
 			email_verified_at,
 			created_at,
-			updated_at
+			updated_at,
+			COALESCE(deleted_at, NULL),
+			max_sessions
 		FROM users
 		WHERE email = $1
+		  AND deleted_at IS NULL
 	`, email)
 }
 
-func (r *Repository) getUser(
-	ctx context.Context,
-	query string,
-	args ...any,
-) (*entity.User, error) {
-	u := &entity.User{}
-
-	err := r.db.QueryRowContext(ctx, query, args...).Scan(
-		&u.ID,
-		&u.OrganizationID,
-		&u.Name,
-		&u.Email,
-		&u.Role,
-		&u.PasswordHash,
-		&u.PhotoKey,
-		&u.EmailVerifiedAt,
-		&u.CreatedAt,
-		&u.UpdatedAt,
-	)
-
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, repo.ErrNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	return u, nil
-}
 
 func (r *Repository) List(
 	ctx context.Context,
@@ -175,9 +152,12 @@ func (r *Repository) List(
 			COALESCE(photo_key, ''),
 			email_verified_at,
 			created_at,
-			updated_at
+			updated_at,
+			COALESCE(deleted_at, NULL),
+			max_sessions
 		FROM users
 		WHERE organization_id = $1
+		  AND deleted_at IS NULL
 	`
 
 	args := []any{organizationID}
@@ -230,6 +210,8 @@ func (r *Repository) List(
 			&u.EmailVerifiedAt,
 			&u.CreatedAt,
 			&u.UpdatedAt,
+			&u.DeletedAt,
+			&u.MaxSessions,
 		); err != nil {
 			return nil, err
 		}
@@ -257,6 +239,7 @@ func (r *Repository) Update(
 			photo_key = COALESCE(NULLIF($5, ''), photo_key),
 			updated_at = NOW()
 		WHERE id = $1
+		  AND deleted_at IS NULL
 	`,
 		u.ID,
 		u.Name,
@@ -284,11 +267,16 @@ func (r *Repository) Delete(
 	ctx context.Context,
 	id string,
 ) error {
-	result, err := r.db.ExecContext(
-		ctx,
-		`DELETE FROM users WHERE id = $1`,
-		id,
-	)
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE users
+		SET
+			deleted_at = NOW(),
+			email_verification_token_hash = NULL,
+			email_verification_expires_at = NULL,
+			updated_at = NOW()
+		WHERE id = $1
+		  AND deleted_at IS NULL
+	`, id)
 	if err != nil {
 		return err
 	}
@@ -319,6 +307,7 @@ func (r *Repository) CreateEmailVerificationToken(
 			updated_at = NOW()
 		WHERE id = $1
 		  AND email_verified_at IS NULL
+		  AND deleted_at IS NULL
 	`,
 		userID,
 		tokenHash,
@@ -354,6 +343,7 @@ func (r *Repository) VerifyEmail(
 		WHERE email_verification_token_hash = $1
 		  AND email_verification_expires_at > NOW()
 		  AND email_verified_at IS NULL
+		  AND deleted_at IS NULL
 	`, tokenHash)
 	if err != nil {
 		return err
@@ -369,4 +359,123 @@ func (r *Repository) VerifyEmail(
 	}
 
 	return nil
+}
+
+func (r *Repository) CreatePasswordResetToken(
+    ctx context.Context,
+    userID string,
+    tokenHash string,
+    expiresAt time.Time,
+) error {
+    query := `
+        UPDATE users
+        SET
+            password_reset_token_hash = $1,
+            password_reset_token_expires_at = $2,
+            updated_at = NOW()
+        WHERE id = $3
+          AND deleted_at IS NULL
+    `
+
+    result, err := r.db.ExecContext(
+        ctx,
+        query,
+        tokenHash,
+        expiresAt,
+        userID,
+    )
+    if err != nil {
+        return fmt.Errorf("failed to create password reset token: %w", err)
+    }
+
+    rows, err := result.RowsAffected()
+    if err != nil {
+        return err
+    }
+
+    if rows == 0 {
+        return errors.New("user not found")
+    }
+
+    return nil
+}
+
+
+func (r *Repository) ResetPassword(
+	ctx context.Context,
+	tokenHash string,
+	passwordHash string,
+) (*entity.User, error) {
+	query := `
+		UPDATE users
+		SET
+			password_hash = $1,
+			password_reset_token_hash = '',
+			password_reset_token_expires_at = NULL,
+			updated_at = NOW()
+		WHERE password_reset_token_hash = $2
+		  AND password_reset_token_hash <> ''
+		  AND password_reset_token_expires_at > NOW()
+		  AND deleted_at IS NULL
+		RETURNING id, name, email
+	`
+
+	var user entity.User
+
+	err := r.db.QueryRowContext(
+		ctx,
+		query,
+		passwordHash,
+		tokenHash,
+	).Scan(
+		&user.ID,
+		&user.Name,
+		&user.Email,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, errors.New("invalid or expired password reset link")
+		}
+
+		return nil, fmt.Errorf("failed to reset password: %w", err)
+	}
+
+	return &user, nil
+}
+
+
+// Helpers
+
+func (r *Repository) getUser(
+    ctx context.Context,
+    query string,
+    args ...any,
+) (*entity.User, error) {
+    u := &entity.User{}
+
+    err := r.db.QueryRowContext(ctx, query, args...).Scan(
+        &u.ID,
+        &u.OrganizationID,
+        &u.Name,
+        &u.Email,
+        &u.Role,
+        &u.PasswordHash,
+        &u.PhotoKey,
+        &u.EmailVerifiedAt,
+        &u.CreatedAt,
+        &u.UpdatedAt,
+        &u.DeletedAt,
+        &u.MaxSessions,
+    )
+
+    if errors.Is(err, sql.ErrNoRows) {
+        return nil, repo.ErrNotFound
+    }
+
+    if err != nil {
+        return nil, err
+    }
+
+    return u, nil
 }
