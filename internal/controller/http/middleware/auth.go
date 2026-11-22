@@ -144,3 +144,17 @@ func RemoveCookie(c *gin.Context, appEnv string) {
 		true,
 	)
 }
+
+func AddCookie(c *gin.Context, appEnv, token string, maxAge int) {
+	secure := appEnv == "production"
+
+	c.SetCookie(
+		TokenKey,
+		token,
+		maxAge,
+		"/",
+		"",
+		secure,
+		true,
+	)
+}

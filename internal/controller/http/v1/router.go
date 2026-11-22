@@ -47,7 +47,7 @@ func NewRouter(
 		})
 	})
 	organizationHandler := NewOrganizationHandler(organizationUseCase, validate)
-	userHandler := NewUserHandler(users, cfg.App, validate, jwtManager)
+	userHandler := NewUserHandler(users, cfg.App, cfg.JWT, validate, jwtManager)
 	styleHandler := NewStyleHandler(styleUseCase, validate)
 	styleOperationHandler := NewStyleOperationHandler(styleOperationUseCase, validate)
 	sizeHandler := NewSizeHandler(sizeUseCase, validate)

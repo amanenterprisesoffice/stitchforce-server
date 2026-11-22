@@ -21,12 +21,14 @@ type UserHandler struct {
 	users    usecase.UserUseCase
 	validate *validator.Validate
 	appCfg   config.AppConfig
+	jwtCfg   config.JWTConfig
 	jwt      *jwt.Manager
 }
 
 func NewUserHandler(
 	users usecase.UserUseCase,
 	appCfg config.AppConfig,
+	jwtCfg config.JWTConfig,
 	validate *validator.Validate,
 	jwtManager *jwt.Manager,
 ) *UserHandler {
@@ -34,6 +36,7 @@ func NewUserHandler(
 		users:    users,
 		validate: validate,
 		appCfg:   appCfg,
+		jwtCfg:   jwtCfg,
 		jwt:      jwtManager,
 	}
 }
@@ -114,17 +117,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 		return
 	}
 
-	secure := h.appCfg.Env == "production"
-
-	c.SetCookie(
-		middleware.TokenKey,
-		token,
-		CookieMaxAge,
-		"/",
-		"",
-		secure,
-		true,
-	)
+	middleware.AddCookie(c, h.appCfg.Env, token, int(h.jwtCfg.TTL))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
