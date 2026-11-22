@@ -13,24 +13,32 @@ jobs:
         env:
           ENV_FILE: ${{ secrets.ENV_FILE }}
         run: |
-          printf '%s\n' "$ENV_FILE" > .env
-          set -a
-          source .env
-          set +a
-          cat <<EOF >> $GITHUB_ENV
-          PGHOST=$POSTGRES_HOST
-          PGPORT=${POSTGRES_PORT:-5432}
-          PGUSER=$POSTGRES_USER
-          PGPASSWORD=$POSTGRES_PASSWORD
-          PGDATABASE=$POSTGRES_DB
-          PGSSLMODE=${POSTGRES_SSLMODE:-require}
-          AWS_ACCESS_KEY_ID=$STORAGE_ACCESS_KEY
-          AWS_SECRET_ACCESS_KEY=$STORAGE_SECRET_KEY
-          AWS_DEFAULT_REGION=${STORAGE_REGION:-auto}
-          STORAGE_BUCKET=$STORAGE_BUCKET
-          STORAGE_ENDPOINT=$STORAGE_ENDPOINT
-          EOF
+          printf '%s\n' "$ENV_FILE" | tr -d '\r' > .env
+          while IFS= read -r line || [ -n "$line" ]; do
+            [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+            key="${line%%=*}"
+            val="${line#*=}"
+            key="$(echo "$key" | xargs)"
+            val="${val%\"}"
+            val="${val#\"}"
+            val="${val%\'}"
+            val="${val#\'}"
+            export "${key}=${val}"
+            echo "${key}=${val}" >> "$GITHUB_ENV"
+          done < .env
           rm -f .env
+
+          {
+            echo "PGHOST=$POSTGRES_HOST"
+            echo "PGPORT=${POSTGRES_PORT:-5432}"
+            echo "PGUSER=$POSTGRES_USER"
+            echo "PGPASSWORD=$POSTGRES_PASSWORD"
+            echo "PGDATABASE=$POSTGRES_DB"
+            echo "PGSSLMODE=${POSTGRES_SSLMODE:-require}"
+            echo "AWS_ACCESS_KEY_ID=$STORAGE_ACCESS_KEY"
+            echo "AWS_SECRET_ACCESS_KEY=$STORAGE_SECRET_KEY"
+            echo "AWS_DEFAULT_REGION=${STORAGE_REGION:-auto}"
+          } >> "$GITHUB_ENV"
 
       - name: Install PostgreSQL 17 client
         run: |
@@ -43,7 +51,7 @@ jobs:
         run: |
           FILENAME="backup-$(date +%Y-%m-%d_%H-%M-%S).dump"
           pg_dump --format=custom --no-owner --no-acl -f "$FILENAME"
-          echo "BACKUP_FILE=$FILENAME" >> $GITHUB_ENV
+          echo "BACKUP_FILE=$FILENAME" >> "$GITHUB_ENV"
 
       - name: Upload to Cloudflare R2
         run: |
