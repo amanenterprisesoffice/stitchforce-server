@@ -338,3 +338,67 @@ type WorkerPaymentUseCase interface {
 		string, // paymentID
 	) error
 }
+
+type NotificationUseCase interface {
+	Create(ctx context.Context, notification *entity.Notification) error
+
+	CreateBulk(ctx context.Context, notifications []*entity.Notification) error
+
+	List(
+		ctx context.Context,
+		userID string,
+		limit int,
+		offset int,
+	) ([]*entity.Notification, error)
+
+	GetUnreadCount(ctx context.Context, userID string) (int, error)
+
+	MarkAsRead(ctx context.Context, userID, notificationID string) error
+
+	MarkAllAsRead(ctx context.Context, userID string) error
+
+	Delete(ctx context.Context, userID, notificationID string) error
+}
+
+type ReportUseCase interface {
+	Create(ctx context.Context, report *entity.Report) error
+
+	List(
+		ctx context.Context,
+		organizationID string,
+		filter input.ReportFilter,
+	) ([]*entity.Report, error)
+
+	GetByID(
+		ctx context.Context,
+		organizationID string,
+		reportID string,
+	) (*entity.Report, error)
+
+	GetDownloadURL(
+		ctx context.Context,
+		organizationID string,
+		reportID string,
+	) (string, error)
+
+	Delete(
+		ctx context.Context,
+		organizationID string,
+		reportID string,
+	) error
+
+	GenerateMonthlyReports(
+		ctx context.Context,
+		now time.Time,
+	) (int, error)
+
+	DeleteExpiredReports(
+		ctx context.Context,
+		now time.Time,
+	) (int, error)
+
+	SendExpirationReminders(
+		ctx context.Context,
+		now time.Time,
+	) (int, error)
+}

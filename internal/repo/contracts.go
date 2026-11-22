@@ -42,7 +42,6 @@ type OrganizationRepository interface {
 		filter input.DashboardFilter,
 	) (*output.OrganizationDashboard, error)
 
-	
 	ListDashboardAlertOrganizations(context.Context) ([]*entity.Organization, error)
 	UpdateDashboardAlertLastSent(context.Context, string, time.Time) error
 }
@@ -54,6 +53,25 @@ type OrganizationInvitationRepository interface {
 	ListByOrganization(context.Context, string) ([]*entity.OrganizationInvitation, error)
 	GetByID(context.Context, string, string) (*entity.OrganizationInvitation, error)
 	Delete(context.Context, string, string) error
+}
+
+type NotificationRepository interface {
+	Create(ctx context.Context, notification *entity.Notification) error
+	CreateBulk(ctx context.Context, notifications []*entity.Notification) error
+	List(
+		ctx context.Context,
+		userID string,
+		limit int,
+		offset int,
+	) ([]*entity.Notification, error)
+
+	GetUnreadCount(ctx context.Context, userID string) (int, error)
+
+	MarkAsRead(ctx context.Context, userID, notificationID string) error
+
+	MarkAllAsRead(ctx context.Context, userID string) error
+
+	Delete(ctx context.Context, userID, notificationID string) error
 }
 
 type UserRepository interface {
@@ -305,4 +323,94 @@ type WorkerPaymentRepository interface {
 		string, // organizationID
 		string, // paymentID
 	) error
+}
+
+type ReportRepository interface {
+	Create(ctx context.Context, report *entity.Report) error
+
+	List(
+		ctx context.Context,
+		organizationID string,
+		filter input.ReportFilter,
+	) ([]*entity.Report, error)
+
+	GetByID(
+		ctx context.Context,
+		organizationID string,
+		reportID string,
+	) (*entity.Report, error)
+
+	ListExpired(
+		ctx context.Context,
+		now time.Time,
+	) ([]*entity.Report, error)
+
+	ListExpiring(
+		ctx context.Context,
+		now time.Time,
+	) ([]*entity.Report, error)
+
+	Delete(
+		ctx context.Context,
+		organizationID string,
+		reportID string,
+	) error
+
+	MarkCleanupCompleted(
+		ctx context.Context,
+		organizationID string,
+		reportID string,
+	) error
+
+	MarkExpirationReminderSent(
+		ctx context.Context,
+		organizationID string,
+		reportID string,
+	) error
+}
+
+type ArchiveRepository interface {
+	StreamProductionEntries(
+		ctx context.Context,
+		organizationID string,
+		from, to time.Time,
+		write func(*entity.ProductionEntry) error,
+	) (int, error)
+
+	StreamWorkerPayments(
+		ctx context.Context,
+		organizationID string,
+		from, to time.Time,
+		write func(*entity.WorkerPayment) error,
+	) (int, error)
+
+	StreamPaymentAllocations(
+		ctx context.Context,
+		organizationID string,
+		from, to time.Time,
+		write func(*output.PaymentAllocation) error,
+	) (int, error)
+
+	StreamCompletedBundles(
+		ctx context.Context,
+		organizationID string,
+		from, to time.Time,
+		write func(*entity.Bundle) error,
+	) (int, error)
+
+	DeleteArchivedData(
+		ctx context.Context,
+		organizationID string,
+		from, to time.Time,
+	) error
+
+	ListEligibleOrganizations(
+		ctx context.Context,
+	) ([]*output.ArchiveOrganization, error)
+
+	ListArchivedPeriods(
+		ctx context.Context,
+		organizationID string,
+		from, to time.Time,
+	) ([]output.ArchivePeriod, error)
 }

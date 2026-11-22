@@ -15,6 +15,7 @@ import (
 func NewRouter(
 	cfg config.Config,
 	users usecase.UserUseCase,
+	notifications usecase.NotificationUseCase,
 	garmentWorkers usecase.GarmentWorkerUseCase,
 	organizationUseCase usecase.OrganizationUseCase,
 	licenseUseCase usecase.LicenseUseCase,
@@ -24,6 +25,7 @@ func NewRouter(
 	bundleUseCase usecase.BundleUseCase,
 	productionEntryUseCase usecase.ProductionEntryUseCase,
 	workerPaymentUseCase usecase.WorkerPaymentUseCase,
+	reports usecase.ReportUseCase,
 	log *logger.Logger,
 	jwtManager *jwt.Manager,
 	validate *validator.Validate,
@@ -54,7 +56,9 @@ func NewRouter(
 	productionEntryHandler := NewProductionEntryHandler(productionEntryUseCase, validate)
 	workerPaymentHandler := NewWorkerPaymentHandler(workerPaymentUseCase, validate)
 	licenseHandler := NewLicenseHandler(licenseUseCase, validate)
-	cronHandler := NewCronHandler(organizationUseCase, validate)
+	cronHandler := NewCronHandler(organizationUseCase, reports, validate)
+	notificationHandler := NewNotificationHandler(notifications, validate)
+	reportHandler := NewReportHandler(reports, validate)
 	v1 := r.Group("/v1")
 	{
 
@@ -62,6 +66,9 @@ func NewRouter(
 		cron.Use(middleware.VerifyCronSecret(cfg.Scheduler))
 		{
 			cron.GET("/dashboard-alerts", cronHandler.SendDashboardAlerts)
+			cron.GET("/monthly-reports", cronHandler.GenerateMonthlyReports)
+			cron.GET("/expired-reports", cronHandler.DeleteExpiredReports)
+			cron.GET("/report-expiration-reminders", cronHandler.SendReportExpirationReminders)
 		}
 
 		auth := v1.Group("/auth")
@@ -83,6 +90,15 @@ func NewRouter(
 				usersRoute.GET("/me", userHandler.GetMe)
 				usersRoute.PATCH("/me", userHandler.UpdateMe)
 				usersRoute.DELETE("/me", userHandler.DeleteMe)
+
+				notifications := usersRoute.Group("/notifications")
+				{
+					notifications.GET("", notificationHandler.List)
+					notifications.GET("/unread-count", notificationHandler.GetUnreadCount)
+					notifications.PATCH("/read-all", notificationHandler.MarkAllAsRead)
+					notifications.PATCH("/:id/read", notificationHandler.MarkAsRead)
+					notifications.DELETE("/:id", notificationHandler.Delete)
+				}
 
 				usersRoute.GET("/:id",
 					middleware.RequirePermission(authorization.PermissionUsersView),
@@ -113,6 +129,22 @@ func NewRouter(
 					middleware.RequirePermission(authorization.PermissionOrganizationView),
 					organizationHandler.GetByID,
 				)
+
+				// make reports group
+				reports := organizations.Group("/reports")
+				{
+					reports.GET("",
+						middleware.OrganizationAccess(organizationUseCase, false),
+						middleware.RequirePermission(authorization.PermissionOrganizationView),
+						reportHandler.List,
+					)
+
+					reports.GET("/:reportID/download",
+						middleware.OrganizationAccess(organizationUseCase, false),
+						middleware.RequirePermission(authorization.PermissionOrganizationView),
+						reportHandler.GetDownloadURL,
+					)
+				}
 
 				// All normal organization routes require an active license and membership.
 				licensed := organizations.Group("")

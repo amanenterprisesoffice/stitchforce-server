@@ -2,6 +2,7 @@ package v1
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"stitchforce-server/internal/repo"
 
@@ -9,6 +10,7 @@ import (
 )
 
 func writeError(c *gin.Context, err error) {
+	log.Println("Error on Server:", err.Error())
 	switch {
 	case errors.Is(err, repo.ErrNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"message": "not found"}})

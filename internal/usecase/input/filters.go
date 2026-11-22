@@ -110,3 +110,13 @@ type WorkerPaymentSummaryFilter struct {
 	FromDate *time.Time
 	ToDate   *time.Time
 }
+
+
+
+type ReportFilter struct {
+    Year  *int
+    Month *int
+
+    Limit  int
+    Offset int
+}

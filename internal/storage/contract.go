@@ -15,6 +15,13 @@ type Storage interface {
 		contentType string,
 	) error
 
+	UploadStream(
+		ctx context.Context,
+		key string,
+		file io.Reader,
+		contentType string,
+	) error
+
 	Delete(
 		ctx context.Context,
 		key string,

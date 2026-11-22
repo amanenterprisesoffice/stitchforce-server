@@ -113,6 +113,9 @@ func Auth(
 			return
 		}
 
+		if claims.UserID == "" || claims.Role == "" || claims.OrganizationID == "" {
+			RemoveCookie(c, cfg.Env)
+		}
 		c.Set(UserIDKey, claims.UserID)
 		c.Set(UserRoleKey, claims.Role)
 		c.Set(OrgIDKey, claims.OrganizationID)

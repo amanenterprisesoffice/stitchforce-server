@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	awsS3 "github.com/aws/aws-sdk-go-v2/service/s3"
+    "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 )
 
 type Storage struct {
@@ -93,6 +94,43 @@ func (s *Storage) Upload(
 	})
 	if err != nil {
 		return fmt.Errorf("upload object: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Storage) UploadStream(
+	ctx context.Context,
+	key string,
+	file io.Reader,
+	contentType string,
+) error {
+	if strings.TrimSpace(key) == "" {
+		return errors.New("storage key is required")
+	}
+
+	if file == nil {
+		return errors.New("file is required")
+	}
+
+	if strings.TrimSpace(contentType) == "" {
+		return errors.New("content type is required")
+	}
+
+	uploader := manager.NewUploader(s.client, func(u *manager.Uploader) {
+		u.PartSize = 8 * 1024 * 1024 // 8 MB per part
+		u.Concurrency = 2
+	})
+
+	_, err := uploader.Upload(ctx, &awsS3.PutObjectInput{
+		Bucket:      aws.String(s.bucket),
+		Key:         aws.String(key),
+		Body:        file,
+		ContentType: aws.String(contentType),
+	})
+
+	if err != nil {
+		return fmt.Errorf("stream upload object: %w", err)
 	}
 
 	return nil

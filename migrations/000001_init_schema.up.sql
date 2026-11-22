@@ -279,6 +279,11 @@ CREATE INDEX idx_bundles_status
     ON bundles(organization_id, status)
     WHERE deleted_at IS NULL;
 
+CREATE INDEX IF NOT EXISTS idx_bundles_completed_archive
+ON bundles (organization_id, updated_at)
+WHERE status = 'completed'
+  AND deleted_at IS NULL;
+
 
 -- =========================================
 -- 9. PRODUCTION ENTRIES
@@ -546,7 +551,62 @@ ON user_sessions(organization_id);
 CREATE INDEX idx_user_sessions_active
 ON user_sessions(user_id, created_at DESC)
 WHERE revoked_at IS NULL;
-    
+
+
+CREATE TABLE notifications (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type VARCHAR(100) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    data JSONB NOT NULL DEFAULT '{}'::jsonb,
+    action_url TEXT NOT NULL DEFAULT '',
+    read_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_notifications_user_created
+ON notifications(user_id, created_at DESC);
+
+CREATE INDEX idx_notifications_user_unread
+ON notifications(user_id, created_at DESC)
+WHERE read_at IS NULL;
+
+CREATE TABLE reports (
+    id TEXT PRIMARY KEY,
+
+    organization_id TEXT NOT NULL
+        REFERENCES organizations(id) ON DELETE CASCADE,
+
+    type VARCHAR(50) NOT NULL,
+
+    year INTEGER NOT NULL,
+    month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+
+    file_key TEXT NOT NULL,
+    file_size BIGINT NOT NULL DEFAULT 0,
+
+    record_counts JSONB NOT NULL DEFAULT '{}'::jsonb,
+
+    archived_at TIMESTAMPTZ NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    cleanup_completed BOOLEAN NOT NULL DEFAULT FALSE,
+    expiration_reminder_sent_at TIMESTAMPTZ,
+
+    CONSTRAINT uq_reports_organization_period
+        UNIQUE (organization_id, type, year, month)
+);
+
+CREATE INDEX idx_reports_organization_archived
+    ON reports(organization_id, archived_at DESC);
+
+CREATE INDEX idx_reports_expiration
+    ON reports(expires_at);
+
 -- =========================================
 -- END OF SCHEMA
 -- =========================================

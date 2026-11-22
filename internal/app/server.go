@@ -27,6 +27,7 @@ func NewServer(
 	router := httpv1.NewRouter(
 		cfg,
 		useCases.Users,
+		useCases.Notifications,
 		useCases.GarmentWorkers,
 		useCases.Organizations,
 		useCases.License,
@@ -36,6 +37,7 @@ func NewServer(
 		useCases.Bundle,
 		useCases.ProductionEntries,
 		useCases.WorkerPayments,
+		useCases.Reports,
 		log,
 		jwtManager,
 		validator.New(),
