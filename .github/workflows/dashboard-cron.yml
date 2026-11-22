@@ -4,14 +4,28 @@ on:
   schedule:
     # Runs every 30 minutes
     - cron: '*/30 * * * *'
-  # Lets you trigger the job manually from the GitHub Actions tab
+  # Lets you trigger the job manually from the GitHub Actions tab, put APP_URL with the trailing slash removed and CRON_SECRET in the environment variables 
   workflow_dispatch:
 
 jobs:
   trigger-cron:
     runs-on: ubuntu-latest
     steps:
+      - name: Load .env into runner
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          printf '%s\n' "$ENV_FILE" > .env
+          set -a
+          source .env
+          set +a
+          cat <<EOF >> $GITHUB_ENV
+          APP_URL=${APP_URL%/}
+          CRON_SECRET=$CRON_SECRET
+          EOF
+          rm -f .env
+
       - name: Call Vercel Cron Endpoint
         run: |
-          curl --fail -sS -X GET "${{ secrets.APP_URL }}/v1/cron/dashboard-alerts" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+          curl --fail -sS -X GET "${APP_URL}/v1/cron/dashboard-alerts" \
+            -H "Authorization: Bearer ${CRON_SECRET}"

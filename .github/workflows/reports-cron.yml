@@ -12,17 +12,31 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Load .env into runner
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          printf '%s\n' "$ENV_FILE" > .env
+          set -a
+          source .env
+          set +a
+          cat <<EOF >> $GITHUB_ENV
+          APP_URL=${APP_URL%/}
+          CRON_SECRET=$CRON_SECRET
+          EOF
+          rm -f .env
+
       - name: Generate Monthly Reports
         run: |
-          curl --fail -sS -X GET "${{ secrets.APP_URL }}/v1/cron/monthly-reports" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+          curl --fail -sS -X GET "${APP_URL}/v1/cron/monthly-reports" \
+            -H "Authorization: Bearer ${CRON_SECRET}"
 
       - name: Send Report Expiration Reminders
         run: |
-          curl --fail -sS -X GET "${{ secrets.APP_URL }}/v1/cron/report-expiration-reminders" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+          curl --fail -sS -X GET "${APP_URL}/v1/cron/report-expiration-reminders" \
+            -H "Authorization: Bearer ${CRON_SECRET}"
 
       - name: Delete Expired Reports
         run: |
-          curl --fail -sS -X GET "${{ secrets.APP_URL }}/v1/cron/expired-reports" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+          curl --fail -sS -X GET "${APP_URL}/v1/cron/expired-reports" \
+            -H "Authorization: Bearer ${CRON_SECRET}"

@@ -1,0 +1,51 @@
+name: Daily Postgres Backup to R2
+
+on:
+  schedule:
+    - cron: '30 20 * * *' # Runs daily at 2:00 AM IST
+  workflow_dispatch:       # Lets you trigger a manual backup anytime
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Load .env into runner
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          printf '%s\n' "$ENV_FILE" > .env
+          set -a
+          source .env
+          set +a
+          cat <<EOF >> $GITHUB_ENV
+          PGHOST=$POSTGRES_HOST
+          PGPORT=${POSTGRES_PORT:-5432}
+          PGUSER=$POSTGRES_USER
+          PGPASSWORD=$POSTGRES_PASSWORD
+          PGDATABASE=$POSTGRES_DB
+          PGSSLMODE=${POSTGRES_SSLMODE:-require}
+          AWS_ACCESS_KEY_ID=$STORAGE_ACCESS_KEY
+          AWS_SECRET_ACCESS_KEY=$STORAGE_SECRET_KEY
+          AWS_DEFAULT_REGION=${STORAGE_REGION:-auto}
+          STORAGE_BUCKET=$STORAGE_BUCKET
+          STORAGE_ENDPOINT=$STORAGE_ENDPOINT
+          EOF
+          rm -f .env
+
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Dump database
+        run: |
+          FILENAME="backup-$(date +%Y-%m-%d_%H-%M-%S).dump"
+          pg_dump --format=custom --no-owner --no-acl -f "$FILENAME"
+          echo "BACKUP_FILE=$FILENAME" >> $GITHUB_ENV
+
+      - name: Upload to Cloudflare R2
+        run: |
+          aws s3 cp "$BACKUP_FILE" "s3://${STORAGE_BUCKET}/db-backups/$BACKUP_FILE" \
+            --endpoint-url "${STORAGE_ENDPOINT}"
