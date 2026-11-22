@@ -16,15 +16,22 @@ jobs:
         env:
           ENV_FILE: ${{ secrets.ENV_FILE }}
         run: |
-          printf '%s\n' "$ENV_FILE" > .env
-          set -a
-          source .env
-          set +a
-          cat <<EOF >> $GITHUB_ENV
-          APP_URL=${APP_URL%/}
-          CRON_SECRET=$CRON_SECRET
-          EOF
+          printf '%s\n' "$ENV_FILE" | tr -d '\r' > .env
+          while IFS= read -r line || [ -n "$line" ]; do
+            [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+            key="${line%%=*}"
+            val="${line#*=}"
+            key="$(echo "$key" | xargs)"
+            val="${val%\"}"
+            val="${val#\"}"
+            val="${val%\'}"
+            val="${val#\'}"
+            export "${key}=${val}"
+            echo "${key}=${val}" >> "$GITHUB_ENV"
+          done < .env
           rm -f .env
+
+          echo "APP_URL=${APP_URL%/}" >> "$GITHUB_ENV"
 
       - name: Generate Monthly Reports
         run: |
