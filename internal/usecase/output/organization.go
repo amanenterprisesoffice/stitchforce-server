@@ -23,6 +23,8 @@ type Organization struct {
 	DashboardAlertSchedule   entity.DashboardAlertSchedule `json:"dashboard_alert_schedule" db:"dashboard_alert_schedule"`
 	DashboardAlertLastSentAt *time.Time                    `json:"dashboard_alert_last_sent_at" db:"dashboard_alert_last_sent_at"`
 
+	WorkerPaymentCycle *entity.WorkerPaymentCycle `json:"worker_payment_cycle,omitempty" db:"worker_payment_cycle"`
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

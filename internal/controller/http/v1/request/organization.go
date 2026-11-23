@@ -13,4 +13,5 @@ type UpdateOrganization struct {
 	DashboardAlertEnabled  *bool                          `form:"dashboard_alert_enabled" json:"dashboard_alert_enabled" binding:"omitempty"`
 	DashboardAlertEmail    *string                        `form:"dashboard_alert_email" json:"dashboard_alert_email" binding:"omitempty,email"`
 	DashboardAlertSchedule *entity.DashboardAlertSchedule `form:"dashboard_alert_schedule" json:"dashboard_alert_schedule" binding:"omitempty"`
+	WorkerPaymentCycle     *entity.WorkerPaymentCycle     `json:"worker_payment_cycle" form:"worker_payment_cycle"`
 }

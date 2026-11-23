@@ -112,6 +112,7 @@ func (h *OrganizationHandler) Update(c *gin.Context) {
 		Photo:                 photo,
 		DashboardAlertEnabled: req.DashboardAlertEnabled,
 		DashboardAlertEmail:   req.DashboardAlertEmail,
+		WorkerPaymentCycle:    req.WorkerPaymentCycle,
 	}
 
 	if err := h.organizations.Update(

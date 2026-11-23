@@ -42,7 +42,7 @@ func OrganizationAccess(
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"error": "you do not have access to this organization",
+				"error": err.Error(),
 			})
 			return
 		}

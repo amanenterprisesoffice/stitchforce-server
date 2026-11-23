@@ -142,6 +142,7 @@ func (u *UseCase) Update(
 	if !ucutils.ValidateID(id) {
 		return errors.New("invalid organization ID")
 	}
+
 	if input == nil {
 		return errors.New("update input is required")
 	}
@@ -154,21 +155,27 @@ func (u *UseCase) Update(
 	if input.Name != nil {
 		org.Name = strings.TrimSpace(*input.Name)
 	}
+
 	if input.AddressLine1 != nil {
 		org.AddressLine1 = strings.TrimSpace(*input.AddressLine1)
 	}
+
 	if input.AddressLine2 != nil {
 		org.AddressLine2 = strings.TrimSpace(*input.AddressLine2)
 	}
+
 	if input.City != nil {
 		org.City = strings.TrimSpace(*input.City)
 	}
+
 	if input.State != nil {
 		org.State = strings.TrimSpace(*input.State)
 	}
+
 	if input.PostalCode != nil {
 		org.PostalCode = strings.TrimSpace(*input.PostalCode)
 	}
+
 	if input.Country != nil {
 		org.Country = strings.TrimSpace(*input.Country)
 	}
@@ -185,6 +192,14 @@ func (u *UseCase) Update(
 		org.DashboardAlertSchedule = *input.DashboardAlertSchedule
 	}
 
+	if input.WorkerPaymentCycle != nil {
+		if err := input.WorkerPaymentCycle.Validate(); err != nil {
+			return err
+		}
+
+		org.WorkerPaymentCycle = *input.WorkerPaymentCycle
+	}
+
 	if org.DashboardAlertEnabled {
 		if org.DashboardAlertEmail == "" {
 			return errors.New("dashboard alert email is required")
@@ -193,6 +208,10 @@ func (u *UseCase) Update(
 		if err := org.DashboardAlertSchedule.Validate(); err != nil {
 			return err
 		}
+	}
+
+	if err := org.WorkerPaymentCycle.Validate(); err != nil {
+		return err
 	}
 
 	if err := ucutils.ValidateOrganization(org); err != nil {
@@ -248,6 +267,7 @@ func (u *UseCase) Update(
 			"id", id,
 			"error", err,
 		)
+
 		return err
 	}
 
@@ -262,7 +282,6 @@ func (u *UseCase) Update(
 
 	return nil
 }
-
 func (u *UseCase) Delete(ctx context.Context, id string) error {
 	ok := ucutils.ValidateID(id)
 	if !ok {
@@ -703,14 +722,14 @@ func (u *UseCase) toOutput(
 		LicenseStatus:    org.LicenseStatus,
 		LicenseExpiresAt: org.LicenseExpiresAt,
 
-
-		DashboardAlertEnabled: org.DashboardAlertEnabled,
-		DashboardAlertEmail: org.DashboardAlertEmail,
+		DashboardAlertEnabled:    org.DashboardAlertEnabled,
+		DashboardAlertEmail:      org.DashboardAlertEmail,
 		DashboardAlertSchedule:   org.DashboardAlertSchedule,
 		DashboardAlertLastSentAt: org.DashboardAlertLastSentAt,
+		WorkerPaymentCycle:       &org.WorkerPaymentCycle,
 
-		CreatedAt:        org.CreatedAt,
-		UpdatedAt:        org.UpdatedAt,
+		CreatedAt: org.CreatedAt,
+		UpdatedAt: org.UpdatedAt,
 	}
 
 	if org.PhotoKey != "" {
@@ -1250,7 +1269,6 @@ func (u *UseCase) buildDashboardAlertEmail(
 
 	return email.Render(body)
 }
-
 
 func formatDashboardMoney(amount int64) string {
 	return fmt.Sprintf("₹%.2f", float64(amount)/100)

@@ -11,14 +11,15 @@ import (
 )
 
 type Config struct {
-	App      AppConfig
-	Postgres PostgresConfig
-	JWT      JWTConfig
-	Log      LogConfig
-	Storage  StorageConfig
-	Resend   ResendConfig
-	Frontend FrontendConfig
-	Scheduler   SchedulerConfig
+	App       AppConfig
+	Postgres  PostgresConfig
+	JWT       JWTConfig
+	Log       LogConfig
+	Storage   StorageConfig
+	Resend    ResendConfig
+	Brevo     BrevoConfig
+	Frontend  FrontendConfig
+	Scheduler SchedulerConfig
 }
 
 type (
@@ -67,6 +68,11 @@ type (
 	SchedulerConfig struct {
 		CronSecret string
 	}
+	// BrevoConfig holds the configuration for Brevo service
+	BrevoConfig struct {
+		APIKey string
+		From   string
+	}
 )
 
 func Load() Config {
@@ -114,6 +120,10 @@ func Load() Config {
 		},
 		Scheduler: SchedulerConfig{
 			CronSecret: env("CRON_SECRET", ""),
+		},
+		Brevo: BrevoConfig{
+			APIKey: env("BREVO_API_KEY", ""),
+			From:   env("BREVO_FROM", ""),
 		},
 	}
 }

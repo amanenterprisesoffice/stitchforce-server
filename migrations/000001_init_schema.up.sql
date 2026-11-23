@@ -1,7 +1,6 @@
 -- =========================================
 -- 1. ORGANIZATIONS
 -- =========================================
-
 CREATE TABLE organizations (
     id TEXT PRIMARY KEY,
     name VARCHAR(200) NOT NULL,
@@ -20,19 +19,30 @@ CREATE TABLE organizations (
 
     license_expires_at TIMESTAMPTZ,
 
+    worker_payment_cycle VARCHAR(30) NOT NULL DEFAULT 'half_monthly'
+        CHECK (
+            worker_payment_cycle IN (
+                'half_monthly',
+                'monthly',
+                'bi_monthly',
+                'quarterly',
+                'half_yearly',
+                'yearly'
+            )
+        ),
+
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
     dashboard_alert_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     dashboard_alert_email VARCHAR(255) NOT NULL DEFAULT '',
-    dashboard_alert_schedule JSONB NOT NULL
-        DEFAULT '{
-            "frequency": "daily",
-            "time": "09:00",
-            "timezone": "Asia/Kolkata"
-        }'::jsonb
+    dashboard_alert_schedule JSONB NOT NULL DEFAULT '{
+        "frequency": "daily",
+        "time": "09:00",
+        "timezone": "Asia/Kolkata"
+    }'::jsonb,
     dashboard_alert_last_sent_at TIMESTAMPTZ DEFAULT NULL
 );
-
 -- =========================================
 -- 2. USERS
 -- =========================================

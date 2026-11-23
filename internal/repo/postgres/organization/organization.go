@@ -69,7 +69,8 @@ func (r *Repository) GetByUserAndOrganization(
 			o.dashboard_alert_enabled,
 			o.dashboard_alert_email,
 			o.dashboard_alert_schedule,
-			o.dashboard_alert_last_sent_at
+			o.dashboard_alert_last_sent_at,
+			o.worker_payment_cycle
 		FROM organizations o
 		INNER JOIN users u ON u.organization_id = o.id
 		WHERE u.id = $1
@@ -165,6 +166,7 @@ func (r *Repository) Update(
 			dashboard_alert_enabled = $10,
 			dashboard_alert_email = $11,
 			dashboard_alert_schedule = $12,
+			worker_payment_cycle = $13,
 			updated_at = NOW()
 		WHERE id = $1
 	`
@@ -184,6 +186,7 @@ func (r *Repository) Update(
 		org.DashboardAlertEnabled,
 		org.DashboardAlertEmail,
 		schedule,
+		org.WorkerPaymentCycle,
 	)
 	if err != nil {
 		return err
@@ -884,7 +887,8 @@ const selectColumns = `
     dashboard_alert_enabled,
     dashboard_alert_email,
 	dashboard_alert_schedule,
-	dashboard_alert_last_sent_at
+	dashboard_alert_last_sent_at,
+	worker_payment_cycle
 `
 
 func scanOrganization(row interface {
@@ -915,6 +919,7 @@ func scanOrganization(row interface {
 		&org.DashboardAlertEmail,
 		&schedule,
 		&lastSent,
+		&org.WorkerPaymentCycle,
 	)
 	if err != nil {
 		return nil, err
